@@ -97,7 +97,7 @@ def process_candidate(in_queue,utc,source_name):
 		H_dm = c_float(candidate['H_dm'])
 		H_w = c_int(candidate['H_w'])
 		time_sample = c_int(candidate['sample'])
-		search_dir = FIL_FILE_DIREC+'/'+utc.value+source_name.value+\
+		search_dir = FIL_FILE_DIREC+'/'+utc.value+'/'+source_name.value+\
 				'/BEAM_'+str(beam).zfill(3)+'/'+utc.value+'.fil'
 		logging.info('Searching directory: %s',search_dir)
 		file_directory = c_char_p(search_dir)
