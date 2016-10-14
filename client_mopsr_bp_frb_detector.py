@@ -221,13 +221,14 @@ def main():
 	script_name_suffix = script_name + "_"+bfnode_numb
 	logfile = client_log_dir+'/'+script_name_suffix+'.log'
 	pidfile = client_ctrl_dir+'/'+script_name_suffix+'.pid'
+	verbose = True
 	if verbose:
 		logging.basicConfig(filename=logfile,level=logging.DEBUG,
 				format='(%(levelname)s): [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
 	else:
-		logging.basicConfig(filename=logfile,level=logging.INFO,
+		logging.basicConfig(filename=logfile,level=logging.DEBUG,
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
