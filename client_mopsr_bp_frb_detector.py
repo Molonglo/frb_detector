@@ -67,7 +67,7 @@ def process_monitor_thread(process_list,refresh_time=20):
 	logging.debug("Process monitor thread initiated")
 	boolian_list = [True for i in range(len(process_list))]
 	dead_count = 0
-	n_proc = len(process_list)
+	n_procs = len(process_list)
 	while True:
 		ii = 0
 		for proc in process_list:
