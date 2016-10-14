@@ -66,6 +66,8 @@ def process_monitor_thread(process_list,refresh_time=20):
 	"""
 	logging.debug("Process monitor thread initiated")
 	boolian_list = [True for i in range(len(process_list))]
+	dead_count = 0
+	n_proc = len(process_list)
 	while True:
 		ii = 0
 		for proc in process_list:
@@ -73,6 +75,10 @@ def process_monitor_thread(process_list,refresh_time=20):
 				logging.critical("%i is dead",proc.pid)
 				boolian_list[ii] = False
 				ii+=1
+				dead_count+=1
+		if dead_count == n_procs:
+			logging.critical("All processing slaves are dead")
+			sys.exit(1)
 		time.sleep(refresh_time)
 
 
