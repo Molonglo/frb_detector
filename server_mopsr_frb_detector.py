@@ -576,7 +576,7 @@ def get_xml_tags(flag):
 	else:
 		raise("Unkown Flag")
 
-def send_utc_to_bf(start_utc,bf_addrs):
+def send_utc_to_bf(start_utc,source_name,bf_addrs):
 	""" Sends utc to all bf nodes.
 	
 	Args:
@@ -590,7 +590,7 @@ def send_utc_to_bf(start_utc,bf_addrs):
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
 			s.connect(addr)
-			s.sendall('utc:'+start_utc)
+			s.sendall('utc:'+start_utc+",source:"+source_name)
 			s.close()
 			logging.debug("Connection established, utc sent to: (%s, %i)",addr[0],addr[1])
 		except socket.error:

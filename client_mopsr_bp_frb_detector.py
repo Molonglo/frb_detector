@@ -83,7 +83,7 @@ def terminate_all(n_proc,in_queue):
 		in_queue.put(None)
 
 
-def process_candidate(in_queue,utc):
+def process_candidate(in_queue,utc,source_name):
 	""" Processing function to be multiprocessed """
 	logging.debug("%s Initiated, waiting for candidates" %os.getpid())
 	global n_detect
@@ -97,8 +97,10 @@ def process_candidate(in_queue,utc):
 		H_dm = c_float(candidate['H_dm'])
 		H_w = c_int(candidate['H_w'])
 		time_sample = c_int(candidate['sample'])
-		file_directory = c_char_p(FIL_FILE_DIREC+'/'+utc.value+'/BEAM_'
-				+str(beam).zfill(3)+'/'+utc.value+'.fil')
+		search_dir = FIL_FILE_DIREC+'/'+utc.value+source_name.value+\
+				'/BEAM_'+str(beam).zfill(3)+'/'+utc.value+'.fil'
+		logging.info('Searching directory: %s',search_dir)
+		file_directory = c_char_p(search_dir)
 		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
 		if not ftrs.isphonecall:
 			classifier_input = sort_features(ftrs)
@@ -258,8 +260,9 @@ def main():
 	in_queue = Queue()
 	manager = Manager()
 	utc = manager.Value(c_char_p,"")
+	source_name = manager.Value(c_char_p,"")
 	process_list = [Process(target = process_candidate, 
-		args = (in_queue,utc)) for i in range(n_processes)]
+		args = (in_queue,utc,source_name)) for i in range(n_processes)]
 	for proc in process_list:
 		proc.start()
 	time.sleep(0.5)
@@ -296,7 +299,10 @@ def main():
 		conn,addr = s.accept()
 		from_srv0 = recvall(conn)
 		if from_srv0[:3] == 'utc':
-			utc.value = from_srv0[4:]
+			utc_str,source_str = from_srv0.split(',')
+#			utc.value = from_srv0[4:]
+			utc.value = utc_str.split(':')[1]
+			source_name.value = source_str.split(':')[1]
 			logging.debug("Acquired new utc: %s",utc)
 		elif from_srv0 == 'poison_pill':
 			logging.debug("Poison_pill received, exiting")
@@ -308,7 +314,7 @@ def main():
 				logging.debug("Acquired candidates, sending data to processing slaves")
 				if t_new - t_old > 1 and in_queue.qsize() != 0:
 					logging.warning("Flushing candidates from last run")
-					while qsize() != 0:
+					while in_queue.qsize() != 0:
 						_ = in_queue.get()
 				for candidate in candidate_list:
 					in_queue.put(candidate)
