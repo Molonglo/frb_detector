@@ -775,7 +775,7 @@ def main():
 		# Sending current utc to BF nodes
 		# -------------------------------
 		logging.debug("Sending UTC to bf_nodes")
-		send_utc_to_bf(start_utc,bf_addrs)
+		send_utc_to_bf(start_utc,obsInfo['SOURCE'],bf_addrs)
 		
 		logging.debug("Parsing observation parameters")
 		SOURCE = obsInfo['SOURCE']
