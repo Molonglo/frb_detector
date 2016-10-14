@@ -544,7 +544,7 @@ def translate_xml(msg):
 		xml_tags = get_xml_tags(flag)
 		obsInfo = {}
 		for tag,fmt in xml_tags:
-			obsInfo[tag.upper()] = fmt(root.find(tag).text.upper())
+			obsInfo[tag.upper()] = fmt(root.find(tag).text)
 		return flag,obsInfo
 	elif flag == 'CANDIDATES':
 		utc = root.find('utc_start').text
