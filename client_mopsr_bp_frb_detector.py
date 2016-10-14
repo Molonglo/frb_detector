@@ -228,7 +228,7 @@ def main():
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
 	else:
-		logging.basicConfig(filename=logfile,level=logging.DEBUG,
+		logging.basicConfig(filename=logfile,level=logging.INFO,
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
@@ -300,9 +300,9 @@ def main():
 		conn,addr = s.accept()
 		from_srv0 = recvall(conn)
 		if from_srv0[:3] == 'utc':
-			utc_str,source_str = from_srv0.split(',')
+			utc_str,source_str = from_srv0.split('/')
 #			utc.value = from_srv0[4:]
-			utc.value = utc_str.split(':')[1]
+			utc.value = utc_str[4:]
 			source_name.value = source_str.split(':')[1]
 			logging.debug("Acquired new utc: %s",utc)
 		elif from_srv0 == 'poison_pill':
@@ -313,7 +313,7 @@ def main():
 			candidate_list = cPickle.loads(from_srv0)
 			if len(candidate_list) != 0:
 				logging.debug("Acquired candidates, sending data to processing slaves")
-				if t_new - t_old > 1 and in_queue.qsize() != 0:
+				if t_new - t_old > 4 and in_queue.qsize() != 0:
 					logging.warning("Flushing candidates from last run")
 					while in_queue.qsize() != 0:
 						_ = in_queue.get()

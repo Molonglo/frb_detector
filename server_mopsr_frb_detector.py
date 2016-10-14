@@ -590,7 +590,7 @@ def send_utc_to_bf(start_utc,source_name,bf_addrs):
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
 			s.connect(addr)
-			msg = 'utc:'+start_utc+",source:"+source_name
+			msg = 'utc:'+start_utc+"/source:"+source_name
 			s.sendall(msg)
 			s.close()
 			logging.debug("Connection established, %s sent to: (%s, %i)",msg,addr[0],addr[1])
@@ -704,7 +704,7 @@ def main():
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
 	else:
-		logging.basicConfig(filename=logfile,level=logging.DEBUG,
+		logging.basicConfig(filename=logfile,level=logging.INFO,
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
