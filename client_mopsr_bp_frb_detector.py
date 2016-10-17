@@ -170,17 +170,19 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	logging.info("Trying to send xml dump message to server")
 	logging.info(xml_dump_msg)
 	n_trials = 0
-	while n_trials<3:
+	for _ in range(3)
 		try:
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 			s.connect((SERVER_HOST,DUMPPORT))
 			s.send(xml_dump_msg)
 			s.close()
+			break
 		except socket.error:
 			logging.critical("Couldn't send message, trying again")
 			n_trials += 1
-			time.sleep(0.2)
+			if n_trials != 3:
+				time.sleep(0.2)
 	if n_trials == 3:
 		logging.critical("Couldn't send the message after 3 trials")
 	else:
