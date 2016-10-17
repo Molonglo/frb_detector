@@ -786,18 +786,16 @@ def main():
 		observing_type = obsInfo['OBSERVING_TYPE'].upper()
 		pulsar_list = []
 		refined_pulsar_db = []
-
+		utc_start_datetime = datetime.datetime.strptime(utc_start,"%Y-%m-%d-%H:%M:%S")
 		if observing_type == "TRACKING" and pulsar_monitor_on:
 			refined_pulsar_db = refine_pulsar_db(observing_type,pulsar_db,
 					boresight_ra = obsInfo['RA'],boresight_dec = obsInfo['DEC'])
 			pulsar_list = getPotentialPulsars_tracking(utc_start,boresight_ra,
 					boresight_dec,beam_config["NBEAM"],refined_pulsar_db)
 			time_tag = time.time()
-			utc_start_datetime = datetime.datetime.strptime(utc_start,"%Y-%m-%d-%H:%M:%S")
 			logging.debug("Tracking observation, pulsar monitor is on")
 		elif observing_type == "STATIONARY" and pulsar_monitor_on:
 			refined_pulsar_db = refine_pulsar_db(observing_type,pulsar_db,boresight_dec = obsInfo['DEC'])
-			utc_start_datetime = datetime.datetime.strptime(utc_start,"%Y-%m-%d-%H:%M:%S")
 			logging.debug("Stationary observation, pulsar monitor is on")
 
 		# ---------------------------------------------------------------------
