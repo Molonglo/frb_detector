@@ -619,7 +619,7 @@ if FRB_DETECTOR_CFG['PLOTTING_THREAD'] == 'yes':
 elif FRB_DETECTOR_CFG['PLOTTING_THREAD'] == 'no':
 	plotting_thread_on = False
 
-pulsar_db_directory = FRB_DETECTOR_CFG['PULSAR_DB_DIREC']
+pulsar_db_file = FRB_DETECTOR_CFG['PULSAR_DB_FILE']
 ns_threshold = float(FRB_DETECTOR_CFG['NS_THRESHOLD'])
 md_threshold = float(FRB_DETECTOR_CFG['MD_THRESHOLD'])
 sn_threshold = float(FRB_DETECTOR_CFG['SN_THRESHOLD'])
@@ -687,8 +687,8 @@ def main():
 	baseport = int(mopsr_cfg["FRB_DETECTOR_BASEPORT"])
 
 	if dry_run:
-		srv_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIREC']+'/control'
-		srv_log_dir = FRB_DETECTOR_CFG['TEST_DIREC']+'/logs'
+		srv_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/control'
+		srv_log_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/logs'
 	else:
 		srv_ctrl_dir = mopsr_cfg['SERVER_CONTROL_DIR']
 		srv_log_dir = mopsr_cfg['SERVER_LOG_DIR']
@@ -749,7 +749,7 @@ def main():
 	elif FRB_DETECTOR_CFG['PULSAR_MONITOR'] == 'no':
 		pulsar_monitor_on = False
 		logging.info("Pulsar monitor off")
-	pulsar_db = get_pulsars_db(pulsar_db_directory)
+	pulsar_db = get_pulsars_db(pulsar_db_file)
 
 
 	# Initializing pulsar monitor thread

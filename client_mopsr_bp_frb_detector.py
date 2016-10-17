@@ -7,7 +7,7 @@ libc = CDLL("libc.so.6")
 
 import numpy as np
 import atexit
-from multiprocessing import Queue,Process,Manager
+from multiprocessing import Queue,Process,Manager,Value
 import threading
 import time
 import sys
@@ -114,7 +114,11 @@ def process_candidate(in_queue,utc,source_name):
 			if isFRB:
 				logging.info(str(proba*100)+" chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
-				send_dump_command(utc.value,candidate,ftrs,proba)
+				if DUMP_VOLTAGES:
+					obs_header = parse_cfg(FIL_FILE_DIREC+'/'+utc.value+'/'+\
+							obs.header,['TSAMP'])
+					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
+					send_dump_command(utc.value,candidate,ftrs,proba)
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
@@ -123,9 +127,10 @@ def process_candidate(in_queue,utc,source_name):
 
 
 
-def send_dump_command(utc,candidate,ftrs,proba):
+def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	disp_delay = ((31.25*0.0000083*candidate['H_dm'])/pow(0.840,3))
-	time_sec1 = candidate['sample']*sampling_time - max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
+	time_sec1 = candidate['sample']*sampling_time -\
+			max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
 	time_sec2 = candidate['sample']*sampling_time + disp_delay +\
 			max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
 	fmt = "%Y-%m-%d-%H:%M:%S"
@@ -180,6 +185,10 @@ BASEPORT = int(MOPSR_CFG["FRB_DETECTOR_BASEPORT"])
 DUMPPORT = int(MOPSR_CFG["FRB_DETECTOR_DUMPPORT"])
 
 CLASSIFIER_THRESHOLD = float(FRB_DETECTOR_CFG['CLASSIFIER_THRESHOLD'])
+if FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'yes':
+	DUMP_VOLTAGES = True
+elif FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'no':
+	DUMP_VOLTAGES = False
 FIL_FILE_DIREC = MOPSR_CFG["CLIENT_RECORDING_DIR"]
 
 # Wrapper functions initialization
@@ -258,7 +267,7 @@ def main():
 	# -----------------
 	logging.debug("Loading Classifier")
 	global clf
-	clf = joblib.load(FRB_DETECTOR_CFG['RANDOM_FOREST_DIREC'])
+	clf = joblib.load(FRB_DETECTOR_CFG['RANDOM_FOREST_FILE'])
 	logging.debug("Classifier Loaded")
 	
 	# Spawning Processes
@@ -306,6 +315,11 @@ def main():
 		conn,addr = s.accept()
 		from_srv0 = recvall(conn)
 		if from_srv0[:3] == 'utc':
+			logging.debug("Acquired new utc: %s",utc)
+			if in_queue.qsize() != 0:
+				logging.warning("Flushin candidates for new utc")
+				while in_queue.qsize () != 0:
+					_ = in_queue.get()
 			utc_str,source_str = from_srv0.split('/')
 #			utc.value = from_srv0[4:]
 			utc.value = utc_str[4:]
