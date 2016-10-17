@@ -118,7 +118,8 @@ def process_candidate(in_queue,utc,source_name):
 					obs_header = parse_cfg(FIL_FILE_DIREC+'/'+utc.value+'/'+\
 							obs.header,['TSAMP'])
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
-					send_dump_command(utc.value,candidate,ftrs,proba)
+					send_dump_command(utc.value,sampling_time,
+							candidate,ftrs,proba)
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
@@ -149,6 +150,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	dump_dict['beam_number'] = str(candidate['beam'])
 	xml_dump_msg = create_xml_elem('dump',dump_dict)
 	logging.info("Trying to send xml dump message to server")
+	logging.info(xml_dump_msg)
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 	s.connect((SERVER_HOST,DUMPPORT))
