@@ -12,6 +12,7 @@ import threading
 import time
 import sys
 sys.path.append(os.environ['DADA_ROOT']+'/lib/')
+from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 import logging
 import socket
 import cPickle
@@ -136,27 +137,54 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 			max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
 	fmt = "%Y-%m-%d-%H:%M:%S"
 	fmtms = "%Y-%m-%d-%H:%M:%S.%f"
-	utc_start = datetime.datetime.strptime(utc,fmt) +\
+	cand_start_utc = datetime.datetime.strptime(utc,fmt) +\
 			datetime.timedelta(seconds=time_sec1)
-	utc_end = datetime.datetime.strptime(utc,fmt) +\
+	cand_end_utc = datetime.datetime.strptime(utc,fmt) +\
 			datetime.timedelta(seconds=time_sec2)
-	dump_dict = {}
-	dump_dict['start_utc'] = datetime.datetime.strftime(utc_start,fmtms)[:-5]
-	dump_dict['end_utc'] = datetime.datetime.strftime(utc_end,fmtms)[:-5]
-	dump_dict['dm'] = str(candidate['H_dm'])
-	dump_dict['probability'] = str(proba)
-	dump_dict['utc'] = utc
-	dump_dict['snr'] = str(ftrs.sn)
-	dump_dict['beam_number'] = str(candidate['beam'])
-	xml_dump_msg = create_xml_elem('dump',dump_dict)
+	cand_utc = datetime.datetime.srtptime(utc,fmt) +\
+			datetime.timedelta(seconds=candidate['sample']*sampling_time)
+	dump_tag = Element('frb_detector_message')
+	xml_cmd = SubElement(dump_tag,'cmd')
+	xml_cmd.text = 'dump'
+	xml_cand_start_utc = SubElement(dump_tag,'cand_start_utc')
+	xml_cand_start_utc.text = datetime.datetime.strftime(\
+			cand_start_utc,fmtms)[:-5]
+	xml_cand_utc = SubElement(dump_tag,'cand_utc')
+	xml_cand_utc.text = datetime.datetime.strftime(cand_utc,fmtms)[:-5]
+	xml_cand_end_utc = SubElement(dump_tag,'cand_end_utc')
+	xml_cand_end_utc.text = datetime.datetime.strftime(cand_end_utc,fmtms)[:-5]
+	xml_cand_dm = SubElement(dump_tag,'cand_dm')
+	xml_cand_dm.text = str(candidate['H_dm'])
+	xml_cand_width = SubElement(dump_tag,'cand_width')
+	xml_cand_width.attrib['units'] = 'seconds'
+	xml_cand_width.text = str(ftrs.width*sampling_time)
+	xml_beam_number = SubElement(dump_tag,'beam_number')
+	xml_beam_number.text = str(candidate['beam'])
+	xml_utc_start = SubElement(dump_tag,'utc_start')
+	xml_utc_start.text = utc
+	xml_snr = SubElement(dump_tag,'snr')
+	xml_snr.text = str(ftrs.sn)
+	xml_probability = SubElement(dump_tag,'probability')
+	xml_probability.text = str(proba)
+	xml_dump_msg = tostring(dump_tag,encoding='ISO-8859-1').replace("\n","")
 	logging.info("Trying to send xml dump message to server")
 	logging.info(xml_dump_msg)
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-	s.connect((SERVER_HOST,DUMPPORT))
-	s.send(xml_dump_msg)
-	s.close()
-	logging.info("xml dump message sent")
+	n_trials = 0
+	while n_trials<3:
+		try:
+			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+			s.connect((SERVER_HOST,DUMPPORT))
+			s.send(xml_dump_msg)
+			s.close()
+		except socket.error:
+			logging.critical("Couldn't send message, trying again")
+			n_trials += 1
+			time.sleep(0.2)
+	if n_trials == 3:
+		logging.critical("Couldn't send the message after 3 trials")
+	else:
+		logging.info("xml dump message sent")
 
 def recvall(the_conn):
 	total_data=[]
