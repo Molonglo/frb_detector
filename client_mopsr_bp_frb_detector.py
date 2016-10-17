@@ -141,7 +141,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 			datetime.timedelta(seconds=time_sec1)
 	cand_end_utc = datetime.datetime.strptime(utc,fmt) +\
 			datetime.timedelta(seconds=time_sec2)
-	cand_utc = datetime.datetime.srtptime(utc,fmt) +\
+	cand_utc = datetime.datetime.strptime(utc,fmt) +\
 			datetime.timedelta(seconds=candidate['sample']*sampling_time)
 	dump_tag = Element('frb_detector_message')
 	xml_cmd = SubElement(dump_tag,'cmd')
@@ -345,7 +345,6 @@ def main():
 		conn,addr = s.accept()
 		from_srv0 = recvall(conn)
 		if from_srv0[:3] == 'utc':
-			logging.debug("Acquired new utc: %s",utc)
 			if in_queue.qsize() != 0:
 				logging.warning("Flushin candidates for new utc")
 				while in_queue.qsize () != 0:
