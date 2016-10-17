@@ -146,7 +146,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	dump_dict['dm'] = str(candidate['H_dm'])
 	dump_dict['probability'] = str(proba)
 	dump_dict['utc'] = utc
-	dump_dict['snr'] = str(candidate['H_sn'])
+	dump_dict['snr'] = str(ftrs.sn)
 	dump_dict['beam_number'] = str(candidate['beam'])
 	xml_dump_msg = create_xml_elem('dump',dump_dict)
 	logging.info("Trying to send xml dump message to server")
