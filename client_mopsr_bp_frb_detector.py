@@ -162,7 +162,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	xml_beam_number.text = str(candidate['beam'])
 	xml_utc_start = SubElement(dump_tag,'utc_start')
 	xml_utc_start.text = utc
-	xml_snr = SubElement(dump_tag,'snr')
+	xml_snr = SubElement(dump_tag,'cand_snr')
 	xml_snr.text = str(ftrs.sn)
 	xml_probability = SubElement(dump_tag,'probability')
 	xml_probability.text = str(proba)
