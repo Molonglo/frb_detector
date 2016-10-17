@@ -103,7 +103,7 @@ def process_candidate(in_queue,utc,source_name):
 		H_dm = c_float(candidate['H_dm'])
 		H_w = c_int(candidate['H_w'])
 		time_sample = c_int(candidate['sample'])
-		search_dir = FIL_FILE_DIREC+'/'+utc.value+'/'+source_name.value+\
+		search_dir = FIL_FILE_DIR+'/'+utc.value+'/'+source_name.value+\
 				'/BEAM_'+str(beam).zfill(3)+'/'+utc.value+'.fil'
 		logging.info('Searching directory: %s',search_dir)
 		file_directory = c_char_p(search_dir)
@@ -115,7 +115,7 @@ def process_candidate(in_queue,utc,source_name):
 				logging.info(str(proba*100)+" chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
 				if DUMP_VOLTAGES:
-					obs_header = parse_cfg(FIL_FILE_DIREC+'/'+utc.value+'/'+\
+					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
 							obs.header,['TSAMP'])
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
 					send_dump_command(utc.value,sampling_time,
@@ -191,7 +191,7 @@ if FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'yes':
 	DUMP_VOLTAGES = True
 elif FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'no':
 	DUMP_VOLTAGES = False
-FIL_FILE_DIREC = MOPSR_CFG["CLIENT_RECORDING_DIR"]
+FIL_FILE_DIR = MOPSR_CFG["CLIENT_RECORDING_DIR"]
 
 # Wrapper functions initialization
 # --------------------------------
@@ -226,8 +226,8 @@ def main():
 
 
 	if dry_run:
-		client_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIREC']+'/control'
-		client_log_dir = FRB_DETECTOR_CFG['TEST_DIREC']+'/logs'
+		client_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/control'
+		client_log_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/logs'
 	else:
 		client_ctrl_dir = MOPSR_CFG['CLIENT_CONTROL_DIR']
 		client_log_dir = MOPSR_CFG['CLIENT_LOG_DIR']
