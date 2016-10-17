@@ -784,8 +784,8 @@ def main():
 		mode = obsInfo['MODE']
 		utc_start = obsInfo['UTC_START']
 		observing_type = obsInfo['OBSERVING_TYPE'].upper()
-		pulsar_list = None
-		refined_pulsar_db = None
+		pulsar_list = []
+		refined_pulsar_db = []
 
 		if observing_type == "TRACKING" and pulsar_monitor_on:
 			refined_pulsar_db = refine_pulsar_db(observing_type,pulsar_db,
