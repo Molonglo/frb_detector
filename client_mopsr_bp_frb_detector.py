@@ -53,7 +53,7 @@ def classify(features,threshold=0.5):
 	"""
 	y=clf.predict_proba(features)
 	y=y[0]
-	if y[0]<threshold and y[1]>threshold:
+	if y[1]>threshold:
 		return True,y[1]
 	return False,y[1]
 
