@@ -263,7 +263,13 @@ def thresholdFilter(candidates):
 		(None): If no candidates exist
 	
 	"""
+	logging.info("Received %s candidates",candidates.size)
+	a = np.where(candidates['H_w'] < boxcar_threshold)[0]
+	b = np.where(candidates['H_dm'] > dm_threshold)[0]
 	mask = np.where((candidates['H_w'] < boxcar_threshold) & (candidates['H_dm'] > dm_threshold))[0]
+	logging.info("%s events have widths < than %s",len(a),boxcar_threshold)
+	logging.info("%s events have dm > %s",len(b),dm_threshold)
+	logging.info("%s events that passed both criteria",len(mask))
 	return candidates[mask]
 
 
@@ -709,6 +715,8 @@ def main():
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
 	logging.info("SRV0 master script initializing")
+	logging.info("Width boxcar threshold: %s, DM threshold: %s",
+			boxcar_threshold,dm_threshold)
 	if daemon:
 		logging.info("Demonizing")
 		daemonize(pidfile, logfile)

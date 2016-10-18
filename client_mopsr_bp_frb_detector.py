@@ -170,7 +170,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	logging.info("Trying to send xml dump message to server")
 	logging.info(xml_dump_msg)
 	n_trials = 0
-	for _ in range(3)
+	for _ in range(3):
 		try:
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
