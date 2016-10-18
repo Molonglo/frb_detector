@@ -858,6 +858,8 @@ def main():
 					molonglo.date = utc_start_datetime + datetime.timedelta(milliseconds = low_t*1000)
 					pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
 					send_cands_to_bf(bf_addrs,beam_config,candidateFilter(threshold_candidates[bulk],pulsar_list,False))
+				else:
+					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
 				#Obtained a Stop flag
 				observing = False

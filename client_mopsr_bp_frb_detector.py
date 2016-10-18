@@ -279,8 +279,9 @@ def main():
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
-	logging.debug("BF master script initializing")
-	logging.debug("Main thread pid: %s",pid)
+	logging.info("BF master script initializing")
+	logging.info("Main thread pid: %s",pid)
+	logging.info("Classifier threshold: %s",CLASSIFIER_THRESHOLD)
 	if daemon:
 		daemonize(pidfile, logfile)
 	else:
