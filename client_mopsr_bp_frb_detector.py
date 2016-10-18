@@ -113,7 +113,7 @@ def process_candidate(in_queue,utc,source_name):
 			classifier_input = sort_features(ftrs)
 			isFRB, proba = classify(classifier_input,CLASSIFIER_THRESHOLD)
 			if isFRB:
-				logging.info(str(proba*100)+" chance FRB! Beam: %i, "+\
+				logging.info(str(proba*100)+"% chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
 				if DUMP_VOLTAGES:
 					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
@@ -166,6 +166,10 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	xml_snr.text = str(ftrs.sn)
 	xml_probability = SubElement(dump_tag,'probability')
 	xml_probability.text = str(proba)
+	xml_cand_sample = SubElement(dump_tag,'cand_sample')
+	xml_cand_sample.text = str(candidate['sample'])
+	xml_cand_filter = SubElement(dump_tag,'cand_filter')
+	xml_cand_filter.text = str(candidate['H_w'])
 	xml_dump_msg = tostring(dump_tag,encoding='ISO-8859-1').replace("\n","")
 	logging.info("Trying to send xml dump message to server")
 	logging.info(xml_dump_msg)
