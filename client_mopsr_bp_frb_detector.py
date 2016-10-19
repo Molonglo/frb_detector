@@ -83,11 +83,29 @@ def process_monitor_thread(process_list,refresh_time=10):
 		time.sleep(refresh_time)
 
 
-def terminate_all(n_proc,in_queue):
+def terminate_all(proc_list,in_queue):
 	logging.critical("Terminating sub-processes")
+	n_proc = len(proc_list)
 	for i in range(n_proc):
 #		Poison pill approach
 		in_queue.put(None)
+	time.sleep(0.5)
+	counter = 3
+	for i in range(3):
+		dead = 0
+		for proc in proc_list:
+			if proc.is_alive():
+				dead += 1
+		if dead == 0:
+			return
+		else:
+			logging.critical("Some child processes are still alive, sending"/ 
+					+" sigkill in %s",counter)
+			counter -= 1
+			time.sleep(1)
+	for proc in proc_list:
+		if proc.is_alive():
+			os.kill(proc.pid,SIGKILL)
 
 
 def process_candidate(in_queue,utc,source_name):
@@ -325,7 +343,7 @@ def main():
                 args=(process_list,))
 	monitorThread.setDaemon(True)
 	monitorThread.start()
-	atexit.register(terminate_all,n_processes,in_queue)
+	atexit.register(terminate_all,process_list,in_queue)
 
 	# Creating Server Socket
 	# ----------------------
