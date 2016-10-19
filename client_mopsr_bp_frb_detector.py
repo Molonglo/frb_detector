@@ -57,7 +57,7 @@ def classify(features,threshold=0.5):
 		return True,y[1]
 	return False,y[1]
 
-def process_monitor_thread(process_list,refresh_time=20):
+def process_monitor_thread(process_list,refresh_time=10):
 	"""Function that monitors processes, and reports if any is dead
 		
 		Args:
@@ -287,6 +287,7 @@ def main():
 	logging.info("Main thread pid: %s",pid)
 	logging.info("Classifier threshold: %s",CLASSIFIER_THRESHOLD)
 	if daemon:
+		logging.info("Daemonizing")
 		daemonize(pidfile, logfile)
 	else:
 		atexit.register(delpid,pidfile)
@@ -328,7 +329,6 @@ def main():
 
 	# Creating Server Socket
 	# ----------------------
-	logging.debug("Creating Socket")
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 	
@@ -343,7 +343,7 @@ def main():
 	assert host == socket.gethostname().split(".")[0]
 	s.bind((host,port_no))
 	s.listen(10)
-	logging.debug("listening to: %s, %i",host,port_no)
+	logging.debug("listening for connection from: %s, %i",host,port_no)
 
 	# Entering infinite loop
 	# ----------------------
@@ -384,5 +384,12 @@ if __name__ == "__main__":
 	signal.signal(signal.SIGTERM,sigHandler)
 	try:
 		main()
+	except SystemExit as e:
+		if e.code == "Fork #1":
+			logging.info("Exited from first parent")
+		elif e.code == "Fork #2":
+			logging.info("Exited from second parent")
+		else:
+			logging.exception("")
 	except:
 		logging.exception("")

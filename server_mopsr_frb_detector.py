@@ -718,7 +718,7 @@ def main():
 	logging.info("Width boxcar threshold: %s, DM threshold: %s",
 			boxcar_threshold,dm_threshold)
 	if daemon:
-		logging.info("Demonizing")
+		logging.info("Daemonizing")
 		daemonize(pidfile, logfile)
 	else:
 		atexit.register(delpid,pidfile)
@@ -872,5 +872,12 @@ if __name__ == "__main__":
 	signal.signal(signal.SIGTERM,sigHandler)
 	try:
 		main()
+	except SystemExit as e:
+		if e.code == "Fork #1":
+			logging.info("Exited from first parent")
+		elif e.code == "Fork #2":
+			logging.info("Exited from second parent")
+		else:
+			logging.exception("")
 	except:
 		logging.exception("")
