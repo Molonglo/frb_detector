@@ -107,8 +107,35 @@ def terminate_all(proc_list,in_queue):
 		if proc.is_alive():
 			os.kill(proc.pid,signal.SIGKILL)
 
+def rfi_writer(rfi_writer_queue,bp_number):
+	logging.info("RFI-writer thread initiated")
+	old_utc = ""
+	while True:
+		rfi_str = rfi_writer_queue.get()
+		if rfi_str is None:
+			logging.info("RFI-writer thread exited")
+			break
+		utc,beam,time_sample,width,f1,f2,f3 = rfi_str
+		if utc != old_utc:
+			try: #For first loop
+				rfi_file.close()
+			except NameError:
+				pass
+			rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+					str(bp_number).zfill(2),"a+")
+#			rfi_file.write("#sample\twidth\tF1\tF2\tF3\n")
+			old_utc = utc
+		rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
+				%(beam,time_sample,width,f1,f2,f3))
 
-def process_candidate(in_queue,utc,source_name):
+
+def terminate_writer(rfi_writer_queue):
+	while rfi_writer_queue.qsize() != 0:
+		_ = rfi_writer.get()
+	rfi_writer_queue.put(None)
+
+
+def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 	""" Processing function to be multiprocessed """
 	logging.debug("%s Initiated, waiting for candidates" %os.getpid())
 	global n_detect
@@ -142,9 +169,12 @@ def process_candidate(in_queue,utc,source_name):
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
+				rfi_writer_queue.put([utc.value,beam,time_sample,\
+						ftrs.F1,ftrs.F2,ftrs.F3])
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
-
+			rfi_writer_queue.put([utc.value,beam,time_sample,\
+					ftrs.F1,ftrs.F2,ftrs.F3])
 
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
@@ -300,8 +330,8 @@ def main():
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
-	logging.info("BF master script initializing")
-	logging.info("Main thread pid: %s",pid)
+	logging.info("BP master script initializing")
+#	logging.info("Main thread pid: %s",pid)
 	logging.info("Classifier threshold: %s",CLASSIFIER_THRESHOLD)
 	if daemon:
 		logging.info("Daemonizing")
@@ -317,7 +347,7 @@ def main():
 			args=(client_ctrl_dir,script_name,bfnode_numb))
 	controlThread.setDaemon(True)
 	controlThread.start()
-	
+
 	# Loading Classifier
 	# -----------------
 	logging.debug("Loading Classifier")
@@ -329,20 +359,31 @@ def main():
 	# ------------------
 	logging.debug("Spawning "+str(n_processes)+" processes")
 	in_queue = Queue()
+	rfi_writer_queue = Queue()
 	manager = Manager()
 	utc = manager.Value(c_char_p,"")
 	source_name = manager.Value(c_char_p,"")
 	process_list = [Process(target = process_candidate, 
-		args = (in_queue,utc,source_name)) for i in range(n_processes)]
+		args = (in_queue,utc,source_name,rfi_writer_queue))\
+				for i in range(n_processes)]
 	for proc in process_list:
 		proc.start()
 	time.sleep(0.5)
+	
 	monitorThread = threading.Thread(name = 'monitorThread',
                 target=process_monitor_thread,
                 args=(process_list,))
 	monitorThread.setDaemon(True)
 	monitorThread.start()
+	
+	writerThread = threading.Thread(name = 'writerThread',
+			            target=rfi_writer,
+						args=(rfi_writer_queue,bfnode_numb))
+	writerThread.setDaemon(True)
+	writerThread.start()
+
 	atexit.register(terminate_all,process_list,in_queue)
+	atexit.register(terminate_writer,rfi_writer_queue)
 
 	# Creating Server Socket
 	# ----------------------
