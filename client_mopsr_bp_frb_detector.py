@@ -99,13 +99,13 @@ def terminate_all(proc_list,in_queue):
 		if dead == 0:
 			return
 		else:
-			logging.critical("Some child processes are still alive, sending"/ 
+			logging.critical("Some child processes are still alive, sending"\
 					+" sigkill in %s",counter)
 			counter -= 1
 			time.sleep(1)
 	for proc in proc_list:
 		if proc.is_alive():
-			os.kill(proc.pid,SIGKILL)
+			os.kill(proc.pid,signal.SIGKILL)
 
 
 def process_candidate(in_queue,utc,source_name):
@@ -131,7 +131,7 @@ def process_candidate(in_queue,utc,source_name):
 			classifier_input = sort_features(ftrs)
 			isFRB, proba = classify(classifier_input,CLASSIFIER_THRESHOLD)
 			if isFRB:
-				logging.info(str(proba*100)+"% chance FRB! Beam: %i, "+\
+				logging.info(str(proba*100)+"%% chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
 				if DUMP_VOLTAGES:
 					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
@@ -275,7 +275,6 @@ def main():
 	daemon = args.daemonize
 
 	n_processes = int(FRB_DETECTOR_CFG['N_PROCS'])
-
 
 	if dry_run:
 		client_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/control'

@@ -1,7 +1,7 @@
 import os
 import sys
 import atexit
-from signal import SIGTERM
+from signal import SIGTERM,SIGKILL
 import time
 import logging
 import xml.etree.ElementTree as ET
@@ -149,10 +149,11 @@ def stop_daemon(pidfile):
 	pf = file(pidfile,'r')
 	pid = int(pf.read().rstrip())
 	pf.close()
-	while True:
-		logging.critical("Trying to kill %s ",pid)
-		os.kill(pid,SIGTERM)
-		time.sleep(0.1)
+	logging.critical("Trying to kill main thread %s ",pid)
+	os.kill(pid,SIGTERM)
+	time.sleep(4)
+	logging.critical("Main thread %s is still alive, sending SIGKILL",pid)
+	os.kill(pid,SIGKILL)
 
 def sigHandler(signo,frame):
 	logging.critical("%s Recieved a SIGTERM, cleaning...",os.getpid())
