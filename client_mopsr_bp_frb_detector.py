@@ -169,12 +169,14 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
-				rfi_writer_queue.put([utc.value,beam,time_sample,\
-						ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
+				rfi_writer_queue.put([utc.value,beam.value,time_sample.value,\
+						ftrs.width.value,ftrs.F1.value,
+						ftrs.F2.value,ftrs.F3.value])
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
-			rfi_writer_queue.put([utc.value,beam,time_sample,\
-					ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
+			rfi_writer_queue.put([utc.value,beam.value,time_sample.value,\
+					ftrs.width.value,ftrs.F1.value,
+					ftrs.F2.value,ftrs.F3.value])
 
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
