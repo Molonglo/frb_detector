@@ -131,7 +131,7 @@ def rfi_writer(rfi_writer_queue,bp_number):
 
 def terminate_writer(rfi_writer_queue):
 	while rfi_writer_queue.qsize() != 0:
-		_ = rfi_writer.get()
+		_ = rfi_writer_queue.get()
 	rfi_writer_queue.put(None)
 
 
