@@ -58,7 +58,7 @@ class RFIWriterThread(threading.Thread):
 					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
 							str(self.bp_numb).zfill(2),"a+")
 					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
-							str(self.bp_numb).zfill(2)+"for rfi logging")
+							str(self.bp_numb).zfill(2)+" for rfi logging")
 					return
 				except IOError:
 					time.sleep(1)
@@ -73,13 +73,14 @@ class RFIWriterThread(threading.Thread):
 					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
 							str(self.bp_numb).zfill(2),"a+")
 					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
-							str(self.bp_numb).zfill(2)+"for rfi logging")
+							str(self.bp_numb).zfill(2)+" for rfi logging")
 					return
 				except IOError:
 					time.sleep(1)
 			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
 					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 	def terminate_writer(self):
+		logging.info("Terminating writer thread")
 		time.sleep(0.2) #Give time to flush file
 		self.empty_queue() #Empty queue just in case
 		self.rfi_writer_queue.put(None) #Send poison pill
@@ -203,7 +204,7 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
 			rfi_writer_queue.put([beam,time_sample.value,\
-					ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
+					2**candidate['H_w'],ftrs.F1,ftrs.F2,ftrs.F3])
 
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
@@ -444,10 +445,10 @@ def main():
 					_ = in_queue.get(timeout=0.1)
 			utc_str,source_str = from_srv0.split('/')
 #			utc.value = from_srv0[4:]
-			writerThread.change_file_name(utc_str[4:])
 			utc.value = utc_str[4:]
 			source_name.value = source_str.split(':')[1]
 			logging.debug("Acquired new utc: %s",utc)
+			writerThread.change_file_name(utc_str[4:])
 		elif from_srv0 == 'poison_pill':
 			logging.debug("Poison_pill received, exiting")
 			sys.exit(1)
