@@ -51,15 +51,34 @@ class RFIWriterThread(threading.Thread):
 			self.rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
 					%(beam,time_sample,width,f1,f2,f3))
 	def change_file_name(self,utc):
-		time.sleep(1)
 		if self.rfi_file == None: #For first obs
-			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
-					str(self.bp_numb).zfill(2),"a+")
+			t = time.time()
+			while time.time() - t < 10:
+				try:
+					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+							str(self.bp_numb).zfill(2),"a+")
+					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
+							str(self.bp_numb).zfill(2)+"for rfi logging")
+					return
+				except IOError:
+					time.sleep(1)
+			logging.critical("Couldn't open "++utc+"/rfi.list.BF"+\
+					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 		else:
 			self.empty_queue()
 			self.rfi_file.close()
-			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
-					str(self.bp_numb).zfill(2),"a+")
+			t = time.time()
+			while time.time() - t < 10:
+				try:
+					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+							str(self.bp_numb).zfill(2),"a+")
+					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
+							str(self.bp_numb).zfill(2)+"for rfi logging")
+					return
+				except IOError:
+					time.sleep(1)
+			logging.critical("Couldn't open "++utc+"/rfi.list.BF"+\
+					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 	def terminate_writer(self):
 		time.sleep(0.2) #Give time to flush file
 		self.empty_queue() #Empty queue just in case
