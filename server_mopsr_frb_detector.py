@@ -582,6 +582,22 @@ def get_xml_tags(flag):
 	else:
 		raise("Unkown Flag")
 
+def send_stop_to_bf(obsInfo['SOURCE'],bf_addrs):
+	""" Sends a 'STOP' to clients"""
+	n_bf = len(bf_addrs)
+	for bf_node,addr in bf_addrs.iteritems():
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		try:
+			s.connect(addr)
+			msg = 'STOP'
+			s.sendall(msg)
+			s.close()
+			logging.debug("Connection established, 'STOP' sent to: (%s, %i)"\
+					,msg,addr[0],addr[1])
+		except:
+			logging.critical("Connection to: (%s, %i) refused, couldn't"+\
+					" send utc to %s",addr[0],addr[1],bf_node)
+
 def send_utc_to_bf(start_utc,source_name,bf_addrs):
 	""" Sends utc to all bf nodes.
 	
@@ -862,6 +878,7 @@ def main():
 					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
 				#Obtained a Stop flag
+				send_stop_to_bf(obsInfo['SOURCE'],bf_addrs)
 				observing = False
 			else:
 				logging.critical("Unkown flag")

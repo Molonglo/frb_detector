@@ -65,8 +65,8 @@ class RFIWriterThread(threading.Thread):
 			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
 					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 		else:
-			self.empty_queue()
-			self.rfi_file.close()
+#			self.empty_queue()
+#			self.rfi_file.close()
 			t = time.time()
 			while time.time() - t < 10:
 				try:
@@ -452,6 +452,10 @@ def main():
 		elif from_srv0 == 'poison_pill':
 			logging.debug("Poison_pill received, exiting")
 			sys.exit(1)
+		elif from_srv0 == 'STOP':
+			logging.info('Observation stopped')
+			writerThread.empty_queue()
+			writerThread.rfi_file.close()
 		else:
 			t_new = time.time()
 			candidate_list = cPickle.loads(from_srv0)
