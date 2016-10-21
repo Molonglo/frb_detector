@@ -62,7 +62,7 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(1)
-			logging.critical("Couldn't open "++utc+"/rfi.list.BF"+\
+			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
 					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 		else:
 			self.empty_queue()
@@ -77,7 +77,7 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(1)
-			logging.critical("Couldn't open "++utc+"/rfi.list.BF"+\
+			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
 					str(self.bp_numb).zfill(2)+" after 10 sec of trying")
 	def terminate_writer(self):
 		time.sleep(0.2) #Give time to flush file
