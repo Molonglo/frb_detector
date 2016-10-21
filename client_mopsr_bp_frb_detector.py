@@ -51,11 +51,11 @@ class RFIWriterThread(threading.Thread):
 			self.rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
 					%(beam,time_sample,width,f1,f2,f3))
 	def change_file_name(self,utc):
+		time.sleep(1)
 		if self.rfi_file == None: #For first obs
 			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
 					str(self.bp_numb).zfill(2),"a+")
 		else:
-			time.sleep(0.1)
 			self.empty_queue()
 			self.rfi_file.close()
 			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
