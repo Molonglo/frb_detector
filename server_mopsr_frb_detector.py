@@ -582,7 +582,7 @@ def get_xml_tags(flag):
 	else:
 		raise("Unkown Flag")
 
-def send_stop_to_bf(obsInfo['SOURCE'],bf_addrs):
+def send_stop_to_bf(bf_addrs):
 	""" Sends a 'STOP' to clients"""
 	n_bf = len(bf_addrs)
 	for bf_node,addr in bf_addrs.iteritems():
@@ -878,7 +878,7 @@ def main():
 					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
 				#Obtained a Stop flag
-				send_stop_to_bf(obsInfo['SOURCE'],bf_addrs)
+				send_stop_to_bf(bf_addrs)
 				observing = False
 			else:
 				logging.critical("Unkown flag")
