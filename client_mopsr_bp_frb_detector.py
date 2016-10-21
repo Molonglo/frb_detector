@@ -47,7 +47,7 @@ class RFIWriterThread(threading.Thread):
 				if self.rfi_file != None:
 					self.rfi_file.close()
 				break
-			utc,beam,time_sample,width,f1,f2,f3 = rfi_str
+			beam,time_sample,width,f1,f2,f3 = rfi_str
 			self.rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
 					%(beam,time_sample,width,f1,f2,f3))
 	def change_file_name(self,utc):
