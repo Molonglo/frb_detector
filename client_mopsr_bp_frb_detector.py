@@ -32,6 +32,43 @@ class CandidateFeatures(Structure):
 			("mod_indT",c_float), ("isphonecall",c_int)]
 
 
+class RFIWriterThread(threading.Thread):
+	def __init__(self,bp_numb,rfi_writer_queue,name=None):
+		self.rfi_file = None
+		self.rfi_writer_queue = rfi_writer_queue
+		self.bp_numb = bp_numb
+		super(RFIWriterThread,self).__init__(name = name)
+	def run(self):
+		logging.info("RFI-writer thread initiated")
+		while True:
+			rfi_str = self.rfi_writer_queue.get()
+			if rfi_str is None:
+				logging.info("RFI-writer thread exited")
+				if self.rfi_file != None:
+					self.rfi_file.close()
+				break
+			utc,beam,time_sample,width,f1,f2,f3 = rfi_str
+			self.rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
+					%(beam,time_sample,width,f1,f2,f3))
+	def change_file_name(self,utc):
+		if self.rfi_file == None: #For first obs
+			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+					str(self.bp_numb).zfill(2),"a+")
+		else:
+			time.sleep(0.1)
+			self.empty_queue()
+			self.rfi_file.close()
+			self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+					str(self.bp_numb).zfill(2),"a+")
+	def terminate_writer(self):
+		time.sleep(0.2) #Give time to flush file
+		self.empty_queue() #Empty queue just in case
+		self.rfi_writer_queue.put(None) #Send poison pill
+	def empty_queue(self):
+		while not self.rfi_writer_queue.empty():
+			_ = self.rfi_writer_queue.get(timeout=0.1)
+
+
 def sort_features(ftrs):
 	""" Function that takes in CandidateFeatures object, and returns a numpy
 	array that serves as an input for the classifier"""
@@ -107,33 +144,6 @@ def terminate_all(proc_list,in_queue):
 		if proc.is_alive():
 			os.kill(proc.pid,signal.SIGKILL)
 
-def rfi_writer(rfi_writer_queue,bp_number):
-	logging.info("RFI-writer thread initiated")
-	old_utc = ""
-	while True:
-		rfi_str = rfi_writer_queue.get()
-		if rfi_str is None:
-			logging.info("RFI-writer thread exited")
-			break
-		utc,beam,time_sample,width,f1,f2,f3 = rfi_str
-		if utc != old_utc:
-			try: #For first loop
-				rfi_file.close()
-			except NameError:
-				pass
-			rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
-					str(bp_number).zfill(2),"a+")
-#			rfi_file.write("#sample\twidth\tF1\tF2\tF3\n")
-			old_utc = utc
-		rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
-				%(beam,time_sample,width,f1,f2,f3))
-
-
-def terminate_writer(rfi_writer_queue):
-	while rfi_writer_queue.qsize() != 0:
-		_ = rfi_writer_queue.get()
-	rfi_writer_queue.put(None)
-
 
 def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 	""" Processing function to be multiprocessed """
@@ -169,11 +179,11 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
-				rfi_writer_queue.put([utc.value,beam,time_sample.value,\
+				rfi_writer_queue.put([beam,time_sample.value,\
 						ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
-			rfi_writer_queue.put([utc.value,beam,time_sample.value,\
+			rfi_writer_queue.put([beam,time_sample.value,\
 					ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
 
 
@@ -376,14 +386,13 @@ def main():
 	monitorThread.setDaemon(True)
 	monitorThread.start()
 	
-	writerThread = threading.Thread(name = 'writerThread',
-			            target=rfi_writer,
-						args=(rfi_writer_queue,bfnode_numb))
+	writerThread = RFIWriterThread(bfnode_numb,rfi_writer_queue,
+			name = 'writerThread')
 	writerThread.setDaemon(True)
 	writerThread.start()
 
 	atexit.register(terminate_all,process_list,in_queue)
-	atexit.register(terminate_writer,rfi_writer_queue)
+	atexit.register(writerThread.terminate_writer)
 
 	# Creating Server Socket
 	# ----------------------
@@ -413,9 +422,10 @@ def main():
 			if in_queue.qsize() != 0:
 				logging.warning("Flushin candidates for new utc")
 				while in_queue.qsize () != 0:
-					_ = in_queue.get()
+					_ = in_queue.get(timeout=0.1)
 			utc_str,source_str = from_srv0.split('/')
 #			utc.value = from_srv0[4:]
+			writerThread.change_file_name(utc_str[4:])
 			utc.value = utc_str[4:]
 			source_name.value = source_str.split(':')[1]
 			logging.debug("Acquired new utc: %s",utc)
