@@ -248,8 +248,8 @@ def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
 			if candidateIsPulsar(beam,H_dm,Pulsar):
 				pulsar_file.write(Pulsar['NAME']+" detected at fanbeam: "+\
 						str(beam)+" with dm: "+str(H_dm)+" at time: "+\
-						str(candidate['time']+" and sample: "+\
-							str(candidate['sample']+"\n")
+						str(candidate['time'])+" and sample: "+
+						str(candidate['sample']+"\n"))
 				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
 						beam,H_dm,candidate['time'],candidate['sample'])
 				mask[i] = False
