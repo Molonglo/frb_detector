@@ -800,6 +800,8 @@ def main():
 			logging.critical('Trying again')
 			continue
 		start_utc = obsInfo['UTC_START']
+		logging.info("Received a new start UTC: %s",start_utc)
+		
 		for i in xrange(30):
 			try:
 				pulsar_file = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+\
@@ -808,7 +810,6 @@ def main():
 				break
 			except IOError:
 				time.sleep(0.5)
-		logging.info("Received a new start UTC: %s",start_utc)
 
 		# Sending current utc to BF nodes
 		# -------------------------------

@@ -58,14 +58,14 @@ class RFIWriterThread(threading.Thread):
 			t = time.time()
 			while time.time() - t < 12:
 				try:
-					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2),"a+")
-					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
+					logging.info("successfully opened "+utc+"/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2)+" for rfi logging")
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
+			logging.critical("Couldn't open "+utc+"/rfi.list.BP"+\
 					str(self.bp_numb).zfill(2)+" after 12 sec of trying")
 		else:
 #			self.empty_queue()
@@ -73,14 +73,14 @@ class RFIWriterThread(threading.Thread):
 			t = time.time()
 			while time.time() - t < 12:
 				try:
-					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BF"+\
+					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2),"a+")
-					logging.info("successfully opened "+utc+"/rfi.list.BF"+\
+					logging.info("successfully opened "+utc+"/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2)+" for rfi logging")
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+utc+"/rfi.list.BF"+\
+			logging.critical("Couldn't open "+utc+"/rfi.list.BP"+\
 					str(self.bp_numb).zfill(2)+" after 12 sec of trying")
 	def terminate_writer(self):
 		logging.info("Terminating writer thread")
@@ -316,12 +316,12 @@ get_features.restype = CandidateFeatures
 def main():
 	# Parsing args
 	# ------------
-	parser = argparse.ArgumentParser(description='BF server that handles signals\
+	parser = argparse.ArgumentParser(description='BP server that handles signals\
 			from main server. Spawns ')
-	parser.add_argument('bfnode', type=str, help='Number of the current BF\
+	parser.add_argument('bpnode', type=str, help='Number of the current BP\
 			node running this instance')
 #	parser.add_argument('--nproc', type=int, help ='Number of processes\
-#			to spawn in each BF node for real time searching',
+#			to spawn in each BP node for real time searching',
 #			required = False, default = 4)
 	parser.add_argument('--verbose','-v',action="store_true",help='Verbose\
 			mode.')
@@ -332,7 +332,7 @@ def main():
 	args = parser.parse_args()
 
 	verbose = args.verbose
-	bfnode_numb = args.bfnode
+	bpnode_numb = args.bpnode
 	dry_run = args.test
 #	n_processes = args.nproc
 	daemon = args.daemonize
@@ -349,7 +349,7 @@ def main():
 	pid = os.getpid()
 	script_name = os.path.basename(sys.argv[0]).lstrip("client_").\
 			rstrip(".py")
-	script_name_suffix = script_name + "_"+bfnode_numb
+	script_name_suffix = script_name + "_"+bpnode_numb
 	logfile = client_log_dir+'/'+script_name_suffix+'.log'
 	pidfile = client_ctrl_dir+'/'+script_name_suffix+'.pid'
 	verbose = True
@@ -377,7 +377,7 @@ def main():
 
 	controlThread = threading.Thread(name = 'controlThread',
 			target = client_control_monitor,
-			args=(client_ctrl_dir,script_name,bfnode_numb))
+			args=(client_ctrl_dir,script_name,bpnode_numb))
 	controlThread.setDaemon(True)
 	controlThread.start()
 
@@ -409,7 +409,7 @@ def main():
 	monitorThread.setDaemon(True)
 	monitorThread.start()
 	
-	writerThread = RFIWriterThread(bfnode_numb,rfi_writer_queue,
+	writerThread = RFIWriterThread(bpnode_numb,rfi_writer_queue,
 			name = 'writerThread')
 	writerThread.setDaemon(True)
 	writerThread.start()
@@ -422,14 +422,14 @@ def main():
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 	
-	MOPSR_BP_CFG = parse_cfg(MOPSR_BP_CFG_DIR,['BP_'+str(bfnode_numb)])
+	MOPSR_BP_CFG = parse_cfg(MOPSR_BP_CFG_DIR,['BP_'+str(bpnode_numb)])
 	if dry_run:
 #		host = socket.gethostname()
-		host = MOPSR_BP_CFG['BP_'+str(bfnode_numb)]
+		host = MOPSR_BP_CFG['BP_'+str(bpnode_numb)]
 	else:
-		host = MOPSR_BP_CFG['BP_'+str(bfnode_numb)]
+		host = MOPSR_BP_CFG['BP_'+str(bpnode_numb)]
 	logging.debug("Host name: %s",host)
-	port_no = BASEPORT + 100 + (int(bfnode_numb)+1)
+	port_no = BASEPORT + 100 + (int(bpnode_numb)+1)
 	assert host == socket.gethostname().split(".")[0]
 	s.bind((host,port_no))
 	s.listen(10)
