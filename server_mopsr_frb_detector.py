@@ -223,7 +223,7 @@ def getPotentialPulsars_stationary(ref_pulsar_db):
 
 	
 
-def candidateFilter(candidates,PulsarList,threshold_filter=True):
+def candidateFilter(candidates,PulsarList,utc,threshold_filter=True):
 	"""Function that performs stage 1 masking
 	
 	Returns:
@@ -246,8 +246,14 @@ def candidateFilter(candidates,PulsarList,threshold_filter=True):
 		beam, H_dm = int(candidate['beam']), candidate['H_dm']
 		for Pulsar in PulsarList:
 			if candidateIsPulsar(beam,H_dm,Pulsar):
-				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
-						beam,H_dm,candidate['time'],candidate['sample'])
+				f = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+utc+'/'+\
+						'pulsars.list')
+				f.write("%s detected at fanbeam: %i with dm: %f at time: "+\
+						"%f and sample: %i\n",Pulsar['NAME'],beam,H_dm,\
+						candidate['time'],candidate['sample'])
+				f.close()
+#				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
+#						beam,H_dm,candidate['time'],candidate['sample'])
 				mask[i] = False
 			else:
 				pass
@@ -633,6 +639,10 @@ MOPSR_CFG_DIR = DADA_ROOT_SHARE+'mopsr.cfg'
 MOPSR_BP_CFG_DIR = DADA_ROOT_SHARE+'mopsr_bp.cfg'
 CORNERTURN_CFG_DIR = DADA_ROOT_SHARE+'mopsr_bp_cornerturn.cfg'
 
+MOPSR_CFG = parse_cfg(MOPSR_CFG_DIR,["SERVER_CONTROL_DIR"
+	,"SERVER_LOG_DIR","SERVER_HOST","FRB_DETECTOR_BASEPORT"
+	,"SERVER_RESULTS_DIR"])
+
 
 pulsar_refresh_time = float(FRB_DETECTOR_CFG['PULSAR_REFRESH_TIME'])
 filterbank_directory = "/data/mopsr/archives/"
@@ -703,17 +713,15 @@ def main():
 
 	# Spawning control thread and daemonizing
 	# ---------------------------------------
-	mopsr_cfg = parse_cfg(MOPSR_CFG_DIR,["SERVER_CONTROL_DIR",
-		"SERVER_LOG_DIR","SERVER_HOST","FRB_DETECTOR_BASEPORT"])
-	srv_host = mopsr_cfg["SERVER_HOST"]
-	baseport = int(mopsr_cfg["FRB_DETECTOR_BASEPORT"])
+	srv_host = MOPSR_CFG["SERVER_HOST"]
+	baseport = int(MOPSR_CFG["FRB_DETECTOR_BASEPORT"])
 
 	if dry_run:
 		srv_ctrl_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/control'
 		srv_log_dir = FRB_DETECTOR_CFG['TEST_DIR']+'/logs'
 	else:
-		srv_ctrl_dir = mopsr_cfg['SERVER_CONTROL_DIR']
-		srv_log_dir = mopsr_cfg['SERVER_LOG_DIR']
+		srv_ctrl_dir = MOPSR_CFG['SERVER_CONTROL_DIR']
+		srv_log_dir = MOPSR_CFG['SERVER_LOG_DIR']
 	
 	pid = os.getpid()
 	script_name = os.path.basename(sys.argv[0]).lstrip('server_').\
@@ -838,13 +846,14 @@ def main():
 				if observing_type == "TRACKING":
 					t = time.time()
 					utc_now = utc_start_datetime + datetime.timedelta(
-							milliseconds = heimdal_candidates[0]['time']*1000)#NOTE: for testing
+							milliseconds = heimdal_candidates[0]['time']*1000
 					utc_now = datetime.datetime.strftime(
 							utc_now,"%Y-%m-%d-%H:%M:%S")	#NOTE: for testing
 					if pulsar_monitor_on:
-						pulsar_list = getPotentialPulsars_tracking(utc_now,boresight_ra,boresight_dec,
-								beam_config["NBEAM"],refined_pulsar_db)
-					filtered_candidates = candidateFilter(heimdal_candidates,pulsar_list)
+						pulsar_list = getPotentialPulsars_tracking(utc_now,boresight_ra,
+							boresight_dec,beam_config["NBEAM"],refined_pulsar_db)
+					filtered_candidates = candidateFilter(heimdal_candidates,
+							pulsar_list,start_utc)
 					if filtered_candidates.size != 0:
 						send_cands_to_bf(bf_addrs,beam_config,filtered_candidates)
 				elif observing_type == "STATIONARY":
@@ -860,9 +869,11 @@ def main():
 					while ind < n_cands:
 						if threshold_candidates[ind]['time'] > 1+low_t: #NOTE: '1' is for 1 second of candidates per gulp
 							if pulsar_monitor_on:
-								molonglo.date = utc_start_datetime + datetime.timedelta(milliseconds = low_t*1000)
+								molonglo.date = utc_start_datetime +datetime.timedelta(milliseconds = low_t*1000)
 								pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
-							send_cands_to_bf(bf_addrs,beam_config,candidateFilter(threshold_candidates[bulk],pulsar_list,False))
+							send_cands_to_bf(bf_addrs,beam_config,\
+								candidateFilter(threshold_candidates[bulk],\
+								,pulsar_list,start_utc,False))
 							low_t = threshold_candidates[ind]['time']
 							bulk=[]
 						else:
@@ -873,7 +884,9 @@ def main():
 					logging.debug("Flushing last loop")
 					molonglo.date = utc_start_datetime + datetime.timedelta(milliseconds = low_t*1000)
 					pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
-					send_cands_to_bf(bf_addrs,beam_config,candidateFilter(threshold_candidates[bulk],pulsar_list,False))
+					send_cands_to_bf(bf_addrs,beam_config,\
+							candidateFilter(threshold_candidates[bulk],\
+							pulsar_list,start_utc,False))
 				else:
 					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
