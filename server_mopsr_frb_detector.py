@@ -799,11 +799,12 @@ def main():
 			logging.critical('Trying again')
 			continue
 		start_utc = obsInfo['UTC_START']
-		while True:
+		for i in xrange(30):
 			try:
 				pulsar_file = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+\
 						start_utc+'/pulsars.list','a+')
 				logging.info('Successfully opened pulsars.list file')
+				break
 			except IOError:
 				time.sleep(0.5)
 		logging.info("Received a new start UTC: %s",start_utc)
