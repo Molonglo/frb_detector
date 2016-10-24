@@ -223,7 +223,7 @@ def getPotentialPulsars_stationary(ref_pulsar_db):
 
 	
 
-def candidateFilter(candidates,PulsarList,utc,threshold_filter=True):
+def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
 	"""Function that performs stage 1 masking
 	
 	Returns:
@@ -246,14 +246,11 @@ def candidateFilter(candidates,PulsarList,utc,threshold_filter=True):
 		beam, H_dm = int(candidate['beam']), candidate['H_dm']
 		for Pulsar in PulsarList:
 			if candidateIsPulsar(beam,H_dm,Pulsar):
-				f = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+utc+'/'+\
-						'pulsars.list')
-				f.write("%s detected at fanbeam: %i with dm: %f at time: "+\
-						"%f and sample: %i\n",Pulsar['NAME'],beam,H_dm,\
-						candidate['time'],candidate['sample'])
-				f.close()
-#				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
-#						beam,H_dm,candidate['time'],candidate['sample'])
+				pulsar_file.write("%s detected at fanbeam: %i with dm: %f "+\
+						"at time: %f and sample: %i\n",Pulsar['NAME'],beam,
+						H_dm,candidate['time'],candidate['sample'])
+				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
+						beam,H_dm,candidate['time'],candidate['sample'])
 				mask[i] = False
 			else:
 				pass
@@ -801,7 +798,13 @@ def main():
 			logging.critical('Received a non-starting flag: (%s)',flag)
 			logging.critical('Trying again')
 			continue
-
+		while True:
+			try:
+				pulsar_file = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+\
+						utc+'/pulsars.list','a+')
+				logging.info('Successfully opened pulsars.list file')
+			except IOError:
+				time.sleep(0.5)
 		start_utc = obsInfo['UTC_START']
 		logging.info("Received a new start UTC: %s",start_utc)
 
@@ -853,7 +856,7 @@ def main():
 						pulsar_list = getPotentialPulsars_tracking(utc_now,boresight_ra,
 							boresight_dec,beam_config["NBEAM"],refined_pulsar_db)
 					filtered_candidates = candidateFilter(heimdal_candidates,
-							pulsar_list,start_utc)
+							pulsar_list,pulsar_file)
 					if filtered_candidates.size != 0:
 						send_cands_to_bf(bf_addrs,beam_config,filtered_candidates)
 				elif observing_type == "STATIONARY":
@@ -873,7 +876,7 @@ def main():
 								pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
 							send_cands_to_bf(bf_addrs,beam_config,\
 								candidateFilter(threshold_candidates[bulk],\
-								pulsar_list,start_utc,False))
+								pulsar_list,pulsar_file,False))
 							low_t = threshold_candidates[ind]['time']
 							bulk=[]
 						else:
@@ -886,12 +889,13 @@ def main():
 					pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
 					send_cands_to_bf(bf_addrs,beam_config,\
 							candidateFilter(threshold_candidates[bulk],\
-							pulsar_list,start_utc,False))
+							pulsar_list,pulsar_file,False))
 				else:
 					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
 				#Obtained a Stop flag
 				send_stop_to_bf(bf_addrs)
+				pulsar_file.close()
 				observing = False
 			else:
 				logging.critical("Unkown flag")
