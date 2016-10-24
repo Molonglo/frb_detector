@@ -798,14 +798,14 @@ def main():
 			logging.critical('Received a non-starting flag: (%s)',flag)
 			logging.critical('Trying again')
 			continue
+		start_utc = obsInfo['UTC_START']
 		while True:
 			try:
 				pulsar_file = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+\
-						utc+'/pulsars.list','a+')
+						start_utc+'/pulsars.list','a+')
 				logging.info('Successfully opened pulsars.list file')
 			except IOError:
 				time.sleep(0.5)
-		start_utc = obsInfo['UTC_START']
 		logging.info("Received a new start UTC: %s",start_utc)
 
 		# Sending current utc to BF nodes
