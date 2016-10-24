@@ -845,9 +845,9 @@ def main():
 				logging.info("Received candidates from HEIMDAL")
 				if observing_type == "TRACKING":
 					t = time.time()
-					utc_now = utc_start_datetime + datetime.timedelta(
-							milliseconds = heimdal_candidates[0]['time']*1000
-					utc_now = datetime.datetime.strftime(
+					utc_now = utc_start_datetime + datetime.timedelta(\
+							milliseconds = heimdal_candidates[0]['time']*1000)
+					utc_now = datetime.datetime.strftime(\
 							utc_now,"%Y-%m-%d-%H:%M:%S")	#NOTE: for testing
 					if pulsar_monitor_on:
 						pulsar_list = getPotentialPulsars_tracking(utc_now,boresight_ra,
@@ -873,7 +873,7 @@ def main():
 								pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
 							send_cands_to_bf(bf_addrs,beam_config,\
 								candidateFilter(threshold_candidates[bulk],\
-								,pulsar_list,start_utc,False))
+								pulsar_list,start_utc,False))
 							low_t = threshold_candidates[ind]['time']
 							bulk=[]
 						else:
