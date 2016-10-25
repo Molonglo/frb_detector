@@ -195,7 +195,9 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 						"sample: %i",beam,candidate['sample'])
 				if DUMP_VOLTAGES:
 					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
-							'obs.header',['TSAMP'])
+							+source_name.value+\
+							'/BEAM_'+str(beam).zfill(3)+'/obs.header',\
+							['TSAMP'])
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
 					send_dump_command(utc.value,sampling_time,
 							candidate,ftrs,proba)
