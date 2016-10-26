@@ -58,14 +58,16 @@ class RFIWriterThread(threading.Thread):
 			t = time.time()
 			while time.time() - t < 12:
 				try:
-					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BP"+\
+					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+\
+							"/FB/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2),"a+")
-					logging.info("successfully opened "+utc+"/rfi.list.BP"+\
+					logging.info("successfully opened "+utc+\
+							"/FB/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2)+" for rfi logging")
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+utc+"/rfi.list.BP"+\
+			logging.critical("Couldn't open "+utc+"/FB/rfi.list.BP"+\
 					str(self.bp_numb).zfill(2)+" after 12 sec of trying")
 		else:
 #			self.empty_queue()
