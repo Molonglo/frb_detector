@@ -183,7 +183,7 @@ def getPotentialPulsars_tracking(utc,boresight_ra,boresight_dec,n_beams,pulsar_d
 	for pulsar in pulsar_db:
 		#print PSRJ,RAJ,DECJ
 		pulsar_ns,pulsar_md = _get_nsmd(utc,pulsar['RAJ'],pulsar['DECJ'])
-		if np.abs(telescope_ns-pulsar_ns)<ns_threshold and np.abs(telescope_md-pulsar_md)<md_threshold:
+		if np.abs(telescope_ns-pulsar_ns)<NS_THRESHOLD and np.abs(telescope_md-pulsar_md)<MD_THRESHOLD:
 			index_to_flag.append(i)
 			estimated_fb.append(n_beams*(((pulsar_md-telescope_md)/(2.0/np.cos(np.radians((pulsar_md+telescope_md)/2)))+1)/2.0) + 1)
 		i+=1
@@ -268,11 +268,11 @@ def thresholdFilter(candidates):
 	
 	"""
 	logging.info("Received %s candidates",candidates.size)
-	a = np.where(candidates['H_w'] < boxcar_threshold)[0]
-	b = np.where(candidates['H_dm'] > dm_threshold)[0]
-	mask = np.where((candidates['H_w'] < boxcar_threshold) & (candidates['H_dm'] > dm_threshold))[0]
-	logging.info("%s events have widths < than %s",len(a),boxcar_threshold)
-	logging.info("%s events have dm > %s",len(b),dm_threshold)
+	a = np.where(candidates['H_w'] < BOXCAR_THRESHOLD)[0]
+	b = np.where(candidates['H_dm'] > DM_THRESHOLD)[0]
+	mask = np.where((candidates['H_w'] < BOXCAR_THRESHOLD) & (candidates['H_dm'] > DM_THRESHOLD))[0]
+	logging.info("%s events have widths < than %s",len(a),BOXCAR_THRESHOLD)
+	logging.info("%s events have dm > %s",len(b),DM_THRESHOLD)
 	logging.info("%s events that passed both criteria",len(mask))
 	return candidates[mask]
 
@@ -282,7 +282,9 @@ def candidateIsPulsar(beam,H_dm,pulsar):
 	if pulsar['NAME'] is 'J0835-4510' and H_dm < 100:
 		""" Vela alert! Discard all candidates with DM<100"""
 		return True
-	if (beam >= (pulsar['FB']-2) and beam <= (pulsar['FB']+2)) and (H_dm<1.2*pulsar['DM'] and H_dm>0.8*pulsar['DM']):
+	if (beam >= (pulsar['FB']-2) and beam <= (pulsar['FB']+2)) and\
+			(H_dm<(1+DM_WINDOW/100.)*pulsar['DM'] and\
+			H_dm>(1-DM_WINDOW/100.)*pulsar['DM']):
 		return True
 	else:
 		return False
@@ -650,11 +652,12 @@ elif FRB_DETECTOR_CFG['PLOTTING_THREAD'] == 'no':
 	plotting_thread_on = False
 
 pulsar_db_file = FRB_DETECTOR_CFG['PULSAR_DB_FILE']
-ns_threshold = float(FRB_DETECTOR_CFG['NS_THRESHOLD'])
-md_threshold = float(FRB_DETECTOR_CFG['MD_THRESHOLD'])
-sn_threshold = float(FRB_DETECTOR_CFG['SN_THRESHOLD'])
-boxcar_threshold = float(FRB_DETECTOR_CFG['BOXCAR_THRESHOLD'])
-dm_threshold = float(FRB_DETECTOR_CFG['DM_THRESHOLD'])
+NS_THRESHOLD = float(FRB_DETECTOR_CFG['NS_THRESHOLD'])
+MD_THRESHOLD = float(FRB_DETECTOR_CFG['MD_THRESHOLD'])
+SN_THRESHOLD = float(FRB_DETECTOR_CFG['SN_THRESHOLD'])
+BOXCAR_THRESHOLD = float(FRB_DETECTOR_CFG['BOXCAR_THRESHOLD'])
+DM_THRESHOLD = float(FRB_DETECTOR_CFG['DM_THRESHOLD'])
+DM_WINDOW = float(FRB_DETECTOR_CFG['DM_WINDOW'])
 nsmd_port = int(FRB_DETECTOR_CFG['NSMD_PORT'])
 nsmd_script = FRB_DETECTOR_CFG['NSMD_SCRIPT']
 
@@ -738,7 +741,7 @@ def main():
 				datefmt='%m-%d-%Y-%H:%M:%S')
 	logging.info("SRV0 master script initializing")
 	logging.info("Width boxcar threshold: %s, DM threshold: %s",
-			boxcar_threshold,dm_threshold)
+			BOXCAR_THRESHOLD,DM_THRESHOLD)
 	if daemon:
 		logging.info("Daemonizing")
 		daemonize(pidfile, logfile)
