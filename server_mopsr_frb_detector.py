@@ -245,12 +245,24 @@ def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
 	for candidate in good_candidates:
 		beam, H_dm = int(candidate['beam']), float(candidate['H_dm'])
 		for Pulsar in PulsarList:
-			if candidateIsPulsar(beam,H_dm,Pulsar):
-				pulsar_file.write(Pulsar['NAME']+" detected at fanbeam: "+\
-						str(beam)+" with dm: "+str(H_dm)+" at time: "+\
-						str(candidate['time'])+" and sample: "+
-						str(candidate['sample'])+"\n")
-				logging.info("%s detected at fanbeam: %i with dm: %f at time: %f and sample: %i",Pulsar['NAME'],
+			is_pulsar,hard_filter = candidateIsPulsar(beam,H_dm,Pulsar)
+			if is_pulsar:
+				if hard_filter:
+					pulsar_file.write("*Hard filter* "Pulsar['NAME']+\
+							" detected at fanbeam: "+\
+							str(beam)+" with dm: "+str(H_dm)+" at time: "+\
+							str(candidate['time'])+" and sample: "+
+							str(candidate['sample'])+"\n")
+					logging.info("%s detected at fanbeam: %i with dm: "+\
+							"%f at time: %f and sample: %i",Pulsar['NAME'],
+							beam,H_dm,candidate['time'],candidate['sample'])
+				else:
+					pulsar_file.write(Pulsar['NAME']+" detected at fanbeam: "+\
+							str(beam)+" with dm: "+str(H_dm)+" at time: "+\
+							str(candidate['time'])+" and sample: "+
+							str(candidate['sample'])+"\n")
+					logging.info("%s detected at fanbeam: %i with dm: "+\
+							"%f at time: %f and sample: %i",Pulsar['NAME'],
 						beam,H_dm,candidate['time'],candidate['sample'])
 				mask[i] = False
 			else:
@@ -278,16 +290,30 @@ def thresholdFilter(candidates):
 
 
 def candidateIsPulsar(beam,H_dm,pulsar):
-	"""Function that returns bool, whether pulsar in FB or not """
-	if pulsar['NAME'] is 'J0835-4510' and H_dm < 100:
-		""" Vela alert! Discard all candidates with DM<100"""
-		return True
+	"""
+	Args:
+		beam (int): Beam number of candidate
+		H_dm (float): HEIMDALL's DM
+	
+	Returns:
+		(bool): True if candidate is pulsars
+		(bool): True if hard filtered (Vela or J1644-4559)
+	
+	"""
+	if pulsar['NAME']=='J0835-4510': 
+		if H_dm < 100:
+			""" Vela alert! Discard all candidates with DM<100"""
+			return True,True
+	if pulsar['NAME']=='J1644-4559':
+		if (H_dm<(1+DM_WINDOW/100.)*pulsar['DM'] and\
+				H_dm>(1-DM_WINDOW/100.)*pulsar['DM']):
+			return True,True
 	if (beam >= (pulsar['FB']-2) and beam <= (pulsar['FB']+2)) and\
 			(H_dm<(1+DM_WINDOW/100.)*pulsar['DM'] and\
 			H_dm>(1-DM_WINDOW/100.)*pulsar['DM']):
-		return True
+		return True,False
 	else:
-		return False
+		return False,False
 
 
 def updatePulsarList(pulsar_list_queue,obsInfoQueue,pulsar_refresh_time,
