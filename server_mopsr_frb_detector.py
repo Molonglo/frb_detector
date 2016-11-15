@@ -248,7 +248,7 @@ def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
 			is_pulsar,hard_filter = candidateIsPulsar(beam,H_dm,Pulsar)
 			if is_pulsar:
 				if hard_filter:
-					pulsar_file.write("*Hard filter* "Pulsar['NAME']+\
+					pulsar_file.write("*Hard filter* "+Pulsar['NAME']+\
 							" detected at fanbeam: "+\
 							str(beam)+" with dm: "+str(H_dm)+" at time: "+\
 							str(candidate['time'])+" and sample: "+
