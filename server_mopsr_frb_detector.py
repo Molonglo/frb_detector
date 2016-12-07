@@ -437,18 +437,18 @@ def send_cands_to_bf(bf_addrs,beam_config,filtered_candidates):
 	"""
 	logging.debug("Sending Candidates")
 	candidate_dict = {}
-	n_bf = len(bf_addrs)
-	for i in range(n_bf):
+	n_bp = len(bf_addrs)
+	for i in range(n_bp):
 		bf_node = 'RECV_'+str(i)
 		candidate_dict[bf_node] = []
 	for index,candidate in zip(xrange(len(filtered_candidates)),filtered_candidates):
 		#NOTE: This loop is time inefficient
 		beam = candidate['beam']
-		for i in range(n_bf):
+		for i in range(n_bp):
 			if beam >= beam_config["BEAM_FIRST_RECV_"+str(i)] and beam <= beam_config["BEAM_LAST_RECV_"+str(i)]:
 				candidate_dict['RECV_'+str(i)].append(index)
 				break
-	for i in range(n_bf):
+	for i in range(n_bp):
 		if len(candidate_dict['RECV_'+str(i)]) != 0:
 			send_cands(bf_addrs['RECV_'+str(i)],filtered_candidates[candidate_dict['RECV_'+str(i)]])
 
@@ -475,6 +475,10 @@ def parse_bf_config(config_dir):
 		logging.debug("Opening config file: "+config_dir)
 		for line in o:
 			if line[:6] == "NBEAM ":
+				line = line.split()
+				beam_config[line[0]] = int(line[1])
+				logging.debug("Parsing in "+line[0]+": "+line[1])
+			if line[:6] == "NSEND ":
 				line = line.split()
 				beam_config[line[0]] = int(line[1])
 				logging.debug("Parsing in "+line[0]+": "+line[1])
@@ -616,19 +620,19 @@ def get_xml_tags(flag):
 
 def send_stop_to_bf(bf_addrs):
 	""" Sends a 'STOP' to clients"""
-	n_bf = len(bf_addrs)
-	for bf_node,addr in bf_addrs.iteritems():
+	for hostname,port in set(bf_addrs.values()):
+		#NOTE: used set() to select unique hostname/port pair
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			s.connect(addr)
+			s.connect((hostname,port))
 			msg = 'STOP'
 			s.sendall(msg)
 			s.close()
 			logging.debug("Connection established, 'STOP' sent to: (%s, %i)"\
-					,msg,addr[0],addr[1])
+					,msg,hostname,port)
 		except:
 			logging.critical("Connection to: (%s, %i) refused, couldn't"+\
-					" send utc to %s",addr[0],addr[1],bf_node)
+					" send stop signal",hostname,port)
 
 def send_utc_to_bf(start_utc,source_name,bf_addrs):
 	""" Sends utc to all bf nodes.
@@ -639,17 +643,19 @@ def send_utc_to_bf(start_utc,source_name,bf_addrs):
 							as tuples of (IP,port_number)
 	
 	"""
-	n_bf = len(bf_addrs)
-	for bf_node,addr in bf_addrs.iteritems():
+	for hostname,port in set(bf_addrs.values()):
+		#NOTE: used set() to select unique hostname/port pair
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			s.connect(addr)
+			s.connect((hostname,port))
 			msg = 'utc:'+start_utc+"/source:"+source_name
 			s.sendall(msg)
 			s.close()
-			logging.debug("Connection established, %s sent to: (%s, %i)",msg,addr[0],addr[1])
+			logging.debug("Connection established, %s sent to: (%s, %i)"
+					,msg,hostname,port)
 		except socket.error:
-			logging.critical("Connection to: (%s, %i) refused, couldn't send utc to %s",addr[0],addr[1],bf_node)
+			logging.critical("Connection to: (%s, %i) refused, couldn't"+\
+					" send utc",hostname,port)
 
 
 
@@ -730,8 +736,8 @@ def main():
 
 	dry_run = args.test
 	# --------------------------
-	#n_bf = args.nbf
-	n_bf = 8
+	#n_bp = args.nbf
+	#n_bp = 8
 	daemon = args.daemonize
 
 	# Specifying level of verbosity
@@ -793,9 +799,10 @@ def main():
 	# Saving IPs and port numbers for each BF node
 	# --------------------------------------------
 	bf_addrs = {}
-	for i in range(n_bf):
-		bf_addrs['RECV_'+str(i)] = (bf_ips['RECV_'+str(i)],baseport+100+(i+1))
-	
+	n_bp = beam_config['NSEND']
+	for recv,hostname in bf_ips.iteritems():
+		node_numb = int(hostname[-2:])
+		bf_addrs[recv] = (hostname,baseport+100+(node_numb+1))
 	# Defining listening address
 	# --------------------------
 	listening_addrs = (srv_host,baseport)
