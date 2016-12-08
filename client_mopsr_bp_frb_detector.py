@@ -184,8 +184,9 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 		H_dm = c_float(candidate['H_dm'])
 		H_w = c_int(candidate['H_w'])
 		time_sample = c_int(candidate['sample'])
-		search_dir = FIL_FILE_DIR+'/'+utc.value+'/'+source_name.value+\
-				'/BEAM_'+str(beam).zfill(3)+'/'+utc.value+'.fil'
+		search_dir = FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+				utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
+				'/'+utc.value+'.fil'
 		logging.info('Searching directory: %s',search_dir)
 		file_directory = c_char_p(search_dir)
 		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
@@ -336,7 +337,8 @@ def main():
 	args = parser.parse_args()
 
 	verbose = args.verbose
-	bpnode_numb = args.bpnode
+	global THIS_BPNODE
+	THIS_BPNODE = args.bpnode
 	dry_run = args.test
 #	n_processes = args.nproc
 	daemon = args.daemonize
@@ -353,7 +355,7 @@ def main():
 	pid = os.getpid()
 	script_name = os.path.basename(sys.argv[0]).lstrip("client_").\
 			rstrip(".py")
-	script_name_suffix = script_name + "_"+bpnode_numb
+	script_name_suffix = script_name + "_"+THIS_BPNODE
 	logfile = client_log_dir+'/'+script_name_suffix+'.log'
 	pidfile = client_ctrl_dir+'/'+script_name_suffix+'.pid'
 	verbose = True
@@ -381,7 +383,7 @@ def main():
 
 	controlThread = threading.Thread(name = 'controlThread',
 			target = client_control_monitor,
-			args=(client_ctrl_dir,script_name,bpnode_numb))
+			args=(client_ctrl_dir,script_name,THIS_BPNODE))
 	controlThread.setDaemon(True)
 	controlThread.start()
 
@@ -413,7 +415,7 @@ def main():
 	monitorThread.setDaemon(True)
 	monitorThread.start()
 	
-	writerThread = RFIWriterThread(bpnode_numb,rfi_writer_queue,
+	writerThread = RFIWriterThread(THIS_BPNODE,rfi_writer_queue,
 			name = 'writerThread')
 	writerThread.setDaemon(True)
 	writerThread.start()
@@ -426,14 +428,14 @@ def main():
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 	
-	MOPSR_BP_CFG = parse_cfg(MOPSR_BP_CFG_DIR,['BP_'+str(bpnode_numb)])
+	MOPSR_BP_CFG = parse_cfg(MOPSR_BP_CFG_DIR,['BP_'+str(THIS_BPNODE)])
 	if dry_run:
 #		host = socket.gethostname()
-		host = MOPSR_BP_CFG['BP_'+str(bpnode_numb)]
+		host = MOPSR_BP_CFG['BP_'+str(THIS_BPNODE)]
 	else:
-		host = MOPSR_BP_CFG['BP_'+str(bpnode_numb)]
+		host = MOPSR_BP_CFG['BP_'+str(THIS_BPNODE)]
 	logging.debug("Host name: %s",host)
-	port_no = BASEPORT + 100 + (int(bpnode_numb)+1)
+	port_no = BASEPORT + 100 + (int(THIS_BPNODE)+1)
 	assert host == socket.gethostname().split(".")[0]
 	s.bind((host,port_no))
 	s.listen(10)

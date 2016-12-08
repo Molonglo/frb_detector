@@ -830,7 +830,7 @@ def main():
 		# Sending current utc to BF nodes
 		# -------------------------------
 		logging.debug("Sending UTC to bp_nodes")
-		msg = 'utc:'+start_utc+"/source:"+source_name
+		msg = 'utc:'+start_utc+"/source:"+obsInfo['SOURCE']
 		send_msg_to_bp(msg,bp_addrs)
 		
 		logging.debug("Parsing observation parameters")
