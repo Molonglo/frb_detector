@@ -425,11 +425,11 @@ def send_cands(addr,candidates):
 		logging.critical("Trying to send candidates. Connection to: (%s, %i) refused",addr[0],addr[1])
 
 
-def send_cands_to_bf(bf_addrs,beam_config,filtered_candidates):
+def send_cands_to_bp(bp_addrs,beam_config,filtered_candidates):
 	"""Function that sends candidate list to the corresponding BP nodes
 
 	Args:
-		bf_addrs (dict): dictionary with keys as 'RECV_0', 'RECV_1',... and values
+		bp_addrs (dict): dictionary with keys as 'RECV_0', 'RECV_1',... and values
 							as tuples of (IP,port_number)
 		beam_config (dict): dictionary, output of parse_beams_config()
 		filtered_candidates (list): List of list of candidates to be processed
@@ -437,10 +437,9 @@ def send_cands_to_bf(bf_addrs,beam_config,filtered_candidates):
 	"""
 	logging.debug("Sending Candidates")
 	candidate_dict = {}
-	n_bp = len(bf_addrs)
-	for i in range(n_bp):
-		bf_node = 'RECV_'+str(i)
-		candidate_dict[bf_node] = []
+	n_bp = len(bp_addrs)
+	for bp_node in bp_addrs.iterkeys():
+		candidate_dict[bp_node] = []
 	for index,candidate in zip(xrange(len(filtered_candidates)),filtered_candidates):
 		#NOTE: This loop is time inefficient
 		beam = candidate['beam']
@@ -450,10 +449,10 @@ def send_cands_to_bf(bf_addrs,beam_config,filtered_candidates):
 				break
 	for i in range(n_bp):
 		if len(candidate_dict['RECV_'+str(i)]) != 0:
-			send_cands(bf_addrs['RECV_'+str(i)],filtered_candidates[candidate_dict['RECV_'+str(i)]])
+			send_cands(bp_addrs['RECV_'+str(i)],filtered_candidates[candidate_dict['RECV_'+str(i)]])
 
 	
-def parse_bf_config(config_dir):
+def parse_bp_config(config_dir):
 	""" Function that reads configuration file for the beams, in the shared directory
 
 	Args:
@@ -461,16 +460,16 @@ def parse_bf_config(config_dir):
 							usually /home/dada/linux_64/share/mopsr_bp_cornerturn.cfg
 	
 	Returns:
-		beam_config (dict): dictionary that defines the start/end beam for each bf node
+		beam_config (dict): dictionary that defines the start/end beam for each bp node
 							keys as 'BEAM_FIRST_RECV_0','BEAM_LAST_RECV_1',...
 							values are int 
-		bf_ips (dict): dictionary with keys as 'RECV_0', 'RECV_1',...
-						and values representing the addresses of bf nodes
+		bp_ips (dict): dictionary with keys as 'RECV_0', 'RECV_1',...
+						and values representing the hostnames of bf nodes
 						as 'mpsr-bf00', 'mpsr-bf01',...
 	NOTE: incremented the beam number by 1. (ex: starting 1 ending 352)
 	"""
 	beam_config = {}
-	bf_ips = {}
+	bp_ips = {}
 	with open(config_dir) as o:
 		logging.debug("Opening config file: "+config_dir)
 		for line in o:
@@ -488,9 +487,9 @@ def parse_bf_config(config_dir):
 				logging.debug("Parsing in "+line[0]+": "+line[1])
 			if line[:5] == "RECV_":
 				line = line.split()
-				bf_ips[line[0]] = line[1]
+				bp_ips[line[0]] = line[1]
 				logging.debug("Parsing in "+line[0]+": "+line[1])
-	return beam_config,bf_ips
+	return beam_config,bp_ips
 
 
 def test_socket_listen(host):
@@ -618,47 +617,28 @@ def get_xml_tags(flag):
 	else:
 		raise("Unkown Flag")
 
-def send_stop_to_bf(bf_addrs):
-	""" Sends a 'STOP' to clients"""
-	for hostname,port in set(bf_addrs.values()):
-		#NOTE: used set() to select unique hostname/port pair
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		try:
-			s.connect((hostname,port))
-			msg = 'STOP'
-			s.sendall(msg)
-			s.close()
-			logging.debug("Connection established, 'STOP' sent to: (%s, %i)"\
-					,msg,hostname,port)
-		except:
-			logging.critical("Connection to: (%s, %i) refused, couldn't"+\
-					" send stop signal",hostname,port)
 
-def send_utc_to_bf(start_utc,source_name,bf_addrs):
-	""" Sends utc to all bf nodes.
-	
+
+def send_msg_to_bp(msg,bp_addrs):
+	""" Sends msg to all bp nodes.
+
 	Args:
-		start_utc (str): utc with format 'YYYY-MM-DD-HH:MM:SS'
-		bf_addrs (dict): dictionary with keys as 'RECV_0', 'RECV_1',... and values
-							as tuples of (IP,port_number)
+		msg (str): message that needs to be sent to bp nodes
+		bp_addrs (dict): dictionary with keys as 'RECV_0', 'RECV_1',...
+							and values as tuples of (IP,port_number)
 	
 	"""
-	for hostname,port in set(bf_addrs.values()):
-		#NOTE: used set() to select unique hostname/port pair
+	for recv,(hostname,port) in bp_addrs.iteritems():
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
 			s.connect((hostname,port))
-			msg = 'utc:'+start_utc+"/source:"+source_name
 			s.sendall(msg)
 			s.close()
-			logging.debug("Connection established, %s sent to: (%s, %i)"
-					,msg,hostname,port)
+			logging.debug("Connection established, %s sent to: "+\
+					"(%s, %i) %s",msg,hostname,port,recv)
 		except socket.error:
 			logging.critical("Connection to: (%s, %i) refused, couldn't"+\
-					" send utc",hostname,port)
-
-
-
+					" send '%s' signal to %s",hostname,port,msg,recv)
 
 
 # --------
@@ -724,7 +704,7 @@ def main():
 			parses	HEIMDAL candidates to the corresponding BF nodes for\
 			processing.')
 	parser.add_argument('server',type=str)
-	parser.add_argument('--nbf', type=int, help='Number of bf nodes\
+	parser.add_argument('--nbp', type=int, help='Number of bp nodes\
 			processing data',required=False)
 	parser.add_argument('--verbose','-v',action="store_true",help='Verbose\
 			mode.')
@@ -736,7 +716,7 @@ def main():
 
 	dry_run = args.test
 	# --------------------------
-	#n_bp = args.nbf
+	#n_bp = args.nbp
 	#n_bp = 8
 	daemon = args.daemonize
 
@@ -792,17 +772,17 @@ def main():
 
 	# Parsing beam info from mopsr_bp_cornerturn.cfg file
 	# ---------------------------------------------------
-	logging.debug("Parsing bf configuration file")
-	beam_config,bf_ips = parse_bf_config(CORNERTURN_CFG_DIR)
+	logging.debug("Parsing bp configuration file")
+	beam_config,bp_ips = parse_bp_config(CORNERTURN_CFG_DIR)
 	logging.debug("Configuration files parsed in")
 
 	# Saving IPs and port numbers for each BF node
 	# --------------------------------------------
-	bf_addrs = {}
+	bp_addrs = {}
 	n_bp = beam_config['NSEND']
-	for recv,hostname in bf_ips.iteritems():
-		node_numb = int(hostname[-2:])
-		bf_addrs[recv] = (hostname,baseport+100+(node_numb+1))
+	for recv,hostname in bp_ips.iteritems():
+		node_numb = int(recv[5:]) #eg: recv = RECV_1
+		bp_addrs[recv] = (hostname,baseport+100+(node_numb+1))
 	# Defining listening address
 	# --------------------------
 	listening_addrs = (srv_host,baseport)
@@ -849,8 +829,9 @@ def main():
 
 		# Sending current utc to BF nodes
 		# -------------------------------
-		logging.debug("Sending UTC to bf_nodes")
-		send_utc_to_bf(start_utc,obsInfo['SOURCE'],bf_addrs)
+		logging.debug("Sending UTC to bp_nodes")
+		msg = 'utc:'+start_utc+"/source:"+source_name
+		send_msg_to_bp(msg,bp_addrs)
 		
 		logging.debug("Parsing observation parameters")
 		SOURCE = obsInfo['SOURCE']
@@ -897,7 +878,7 @@ def main():
 					filtered_candidates = candidateFilter(heimdal_candidates,
 							pulsar_list,pulsar_file)
 					if filtered_candidates.size != 0:
-						send_cands_to_bf(bf_addrs,beam_config,filtered_candidates)
+						send_cands_to_bp(bp_addrs,beam_config,filtered_candidates)
 				elif observing_type == "STATIONARY":
 					threshold_candidates = thresholdFilter(heimdal_candidates)
 					n_cands = threshold_candidates.size
@@ -913,7 +894,7 @@ def main():
 							if pulsar_monitor_on:
 								molonglo.date = utc_start_datetime +datetime.timedelta(milliseconds = low_t*1000)
 								pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
-							send_cands_to_bf(bf_addrs,beam_config,\
+							send_cands_to_bp(bp_addrs,beam_config,\
 								candidateFilter(threshold_candidates[bulk],\
 								pulsar_list,pulsar_file,False))
 							low_t = threshold_candidates[ind]['time']
@@ -926,14 +907,14 @@ def main():
 					logging.debug("Flushing last loop")
 					molonglo.date = utc_start_datetime + datetime.timedelta(milliseconds = low_t*1000)
 					pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
-					send_cands_to_bf(bf_addrs,beam_config,\
+					send_cands_to_bp(bp_addrs,beam_config,\
 							candidateFilter(threshold_candidates[bulk],\
 							pulsar_list,pulsar_file,False))
 				else:
 					logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
 			elif flag == "STOP":
 				#Obtained a Stop flag
-				send_stop_to_bf(bf_addrs)
+				send_msg_to_bp(flag,bp_addrs)
 				pulsar_file.close()
 				observing = False
 			else:
