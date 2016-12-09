@@ -2,6 +2,7 @@ import os
 import sys
 import atexit
 from signal import SIGTERM,SIGKILL
+import numpy as np
 import time
 import logging
 import xml.etree.ElementTree as ET

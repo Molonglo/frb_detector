@@ -141,7 +141,7 @@ def process_monitor_thread(process_list,refresh_time=10):
 				dead_count+=1
 		if dead_count == n_procs:
 			logging.critical("All processing slaves are dead")
-			sys.exit(1)
+			os.kill(os.getpid(), signal.SIGTERM)
 		time.sleep(refresh_time)
 
 
