@@ -2,12 +2,12 @@
 
 import os
 from ctypes import *
-functions = CDLL(os.environ['DADA_ROOT']+'/lib/'+'frb_detector_wrapper.so')
-libc = CDLL("libc.so.6")
+#functions = CDLL(os.environ['DADA_ROOT']+'/lib/'+'frb_detector_wrapper.so')
+#libc = CDLL("libc.so.6")
 
 import numpy as np
 import atexit
-from multiprocessing import Queue,Process,Manager,Value
+from multiprocessing import Queue,Process,Manager,Value,Lock
 import threading
 import time
 import sys
@@ -170,7 +170,8 @@ def terminate_all(proc_list,in_queue):
 			os.kill(proc.pid,signal.SIGKILL)
 
 
-def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
+def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
+		lock,training_file):
 	""" Processing function to be multiprocessed """
 	logging.debug("%s Initiated, waiting for candidates" %os.getpid())
 	global n_detect
@@ -188,8 +189,15 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue):
 				utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
 				'/'+utc.value+'.fil'
 		logging.info('Searching directory: %s',search_dir)
-		file_directory = c_char_p(search_dir)
-		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
+		file_directory = c_char_p(search_dir)		
+#		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
+		output_l = get_features(beam,candidate['sample'],candidate['H_dm'],
+				candidate['H_w'],search_dir]
+		output_l.append(utc.value)
+		lock.acquire()
+		training_file.write(str(output_l).strip("[]").replace(", "," ")+"\n")
+		lock.release()
+		continue
 		if not ftrs.isphonecall:
 			classifier_input = sort_features(ftrs)
 			isFRB, proba = classify(classifier_input,CLASSIFIER_THRESHOLD)
@@ -315,8 +323,10 @@ FIL_FILE_DIR = MOPSR_CFG["CLIENT_RECORDING_DIR"]
 
 # Wrapper functions initialization
 # --------------------------------
-get_features = functions.get_features
-get_features.restype = CandidateFeatures
+#get_features = functions.get_features
+#get_features.restype = CandidateFeatures
+
+from helpers import get_features,get_feature_names
 
 def main():
 	# Parsing args
@@ -387,6 +397,8 @@ def main():
 	controlThread.setDaemon(True)
 	controlThread.start()
 
+	lock = Lock()
+
 	# Loading Classifier
 	# -----------------
 	logging.debug("Loading Classifier")
@@ -396,6 +408,11 @@ def main():
 	
 	# Spawning Processes
 	# ------------------
+	hdr = get_feature_names()
+	training_file = open("/home/wfarah/highres_test/feature_extractor/"+\
+			"online_training_set/BP"+str(THIS_BPNODE)+".txt","a")
+	training_file.write(hdr)
+	atexit.register(training_file.close)
 	logging.debug("Spawning "+str(n_processes)+" processes")
 	in_queue = Queue()
 	rfi_writer_queue = Queue()
@@ -403,8 +420,8 @@ def main():
 	utc = manager.Value(c_char_p,"")
 	source_name = manager.Value(c_char_p,"")
 	process_list = [Process(target = process_candidate, 
-		args = (in_queue,utc,source_name,rfi_writer_queue))\
-				for i in range(n_processes)]
+		args = (in_queue,utc,source_name,rfi_writer_queue,lock,
+			training_file)) for i in range(n_processes)]
 	for proc in process_list:
 		proc.start()
 	time.sleep(0.5)
