@@ -67,6 +67,7 @@ class RFIWriterThread(threading.Thread):
 				except IOError:
 					time.sleep(0.5)
 			logging.critical("Couldn't open "+f_dir+" after 16 sec of trying")
+			self.rfi_file = open(f_dir)
 		else:
 #			self.empty_queue()
 #			self.rfi_file.close()
