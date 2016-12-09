@@ -296,6 +296,10 @@ def recvall(the_conn):
 	return ''.join(total_data)
 
 
+def gracefull_file_close(f):
+	logging.info("Closing file: %s",f.name)
+	f.close()
+
 
 # GLOBALS
 # -------
@@ -411,9 +415,9 @@ def main():
 	# ------------------
 	hdr = get_feature_names()
 	training_file = open("/home/wfarah/highres_test/feature_extractor/"+\
-			"online_training_set/BP"+str(THIS_BPNODE)+".txt","a")
+			"online_training_set/BP"+str(THIS_BPNODE)+".txt","a+")
 	training_file.write(hdr)
-	atexit.register(training_file.close)
+	atexit.register(gracefull_file_close,training_file)
 	logging.debug("Spawning "+str(n_processes)+" processes")
 	in_queue = Queue()
 	rfi_writer_queue = Queue()

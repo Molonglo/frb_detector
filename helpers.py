@@ -259,11 +259,11 @@ def get_features(beam,t_sample,H_dm,H_w,file_directory):
 	F2 = 100*event_med_sub[F2_ch].sum() / all_ch
 	F3 = 100*event_med_sub[F3_ch].sum() / all_ch
 	timer = time.time() - timer
-	return [int(beam),int(t_sample),F1,F2,F3,np.sum(event_s-med),
-			np.sum(event_left_s-med),np.sum(event_right_s-med),
-			m,mean_offevent,std_offevent,
-			sig_0,sig_1,sig_2,ks_d,ks_pvalue,sw_w,sw_pvalue,
-			mod_ind,mod_indT,timer]
+	return [int(beam),int(t_sample),float(F1),float(F2),float(F3),
+			np.sum(event_s-med),float(np.sum(event_left_s-med)),
+			float(np.sum(event_right_s-med)),float(m),float(mean_offevent),
+			float(std_offevent),float(sig_0),float(sig_1),float(sig_2),ks_d,
+			ks_pvalue,sw_w,sw_pvalue,float(mod_ind),float(mod_indT),timer]
 
 
 def get_feature_names():
