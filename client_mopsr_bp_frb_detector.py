@@ -56,7 +56,7 @@ class RFIWriterThread(threading.Thread):
 	def change_file_name(self,utc):
 		if self.rfi_file == None: #For first obs
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 16:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
 							"/"+utc+"/FB/rfi.list.BP"+str(self.bp_numb).zfill(2)
@@ -66,12 +66,12 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
+			logging.critical("Couldn't open "+f_dir+" after 16 sec of trying")
 		else:
 #			self.empty_queue()
 #			self.rfi_file.close()
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 16:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
 							"/"+utc+"/FB/rfi.list.BP"+str(self.bp_numb).zfill(2)
@@ -81,7 +81,7 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(0.5)
-				logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
+				logging.critical("Couldn't open "+f_dir+" after 16 sec of trying")
 	def terminate_writer(self):
 		logging.info("Terminating writer thread")
 		time.sleep(0.2) #Give time to flush file
@@ -193,6 +193,7 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 				candidate['H_w'],search_dir)
 		output_l.append(utc.value)
 		lock.acquire()
+		logging.info('%s trying to write to training file',THIS_BPNODE)
 		training_file.write(str(output_l).strip("[]").replace(", "," ")+"\n")
 		lock.release()
 		continue
