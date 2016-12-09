@@ -193,8 +193,10 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 				candidate['H_w'],search_dir)
 		output_l.append(utc.value)
 		lock.acquire()
-		logging.info('%s trying to write to training file',THIS_BPNODE)
-		training_file.write(str(output_l).strip("[]").replace(", "," ")+"\n")
+		logging.info('BP %s trying to write to training file',THIS_BPNODE)
+		c = str(output_l).strip("[]").replace(", "," ")+"\n"
+		logging.info(c)
+		training_file.write(c)
 		lock.release()
 		continue
 		if not ftrs.isphonecall:
