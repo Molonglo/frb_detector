@@ -192,7 +192,7 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 		file_directory = c_char_p(search_dir)		
 #		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
 		output_l = get_features(beam,candidate['sample'],candidate['H_dm'],
-				candidate['H_w'],search_dir]
+				candidate['H_w'],search_dir)
 		output_l.append(utc.value)
 		lock.acquire()
 		training_file.write(str(output_l).strip("[]").replace(", "," ")+"\n")
