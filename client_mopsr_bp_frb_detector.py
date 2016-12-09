@@ -56,7 +56,7 @@ class RFIWriterThread(threading.Thread):
 	def change_file_name(self,utc):
 		if self.rfi_file == None: #For first obs
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 16:
 				try:
 					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+\
 							"/FB/rfi.list.BP"+\
@@ -73,7 +73,7 @@ class RFIWriterThread(threading.Thread):
 #			self.empty_queue()
 #			self.rfi_file.close()
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 16:
 				try:
 					self.rfi_file = open(FIL_FILE_DIR+"/"+utc+"/rfi.list.BP"+\
 							str(self.bp_numb).zfill(2),"a+")

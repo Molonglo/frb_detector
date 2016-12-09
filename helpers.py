@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 sys.path.append("/home/observer/Python/dev/sigpyproc/lib/python")
 from sigpyproc.Readers import FilReader
-from scipy import stats
+import scipy
 import time
 
 fil = FilReader("/home/wfarah/highres_1644/2016-11-10-04:27:01/FB/BEAM_177/2016-11-10-04:27:01.fil")
