@@ -420,7 +420,7 @@ def main():
 			"online_training_set/BP"+str(THIS_BPNODE)+".txt"
 	if not os.path.exists(training_file_dir):
 		hdr = get_feature_names()
-		training_file = open(training_file_dir)
+		training_file = open(training_file_dir,"a+")
 		training_file.write(hdr)
 		training_file.close()
 #	atexit.register(gracefull_file_close,training_file)
