@@ -417,7 +417,8 @@ def send_cands(addr,candidates):
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		s.connect(addr)
-		p = cPickle.dumps(candidates[['sample','H_dm','H_w','beam']],protocol=2)
+		p = cPickle.dumps(candidates[['SN','sample','H_dm',
+			'H_w','beam']],protocol=2)
 		s.sendall(p)
 		s.close()
 		logging.info("Successfully sent candidates to (%s, %i)",addr[0],addr[1])
@@ -597,7 +598,7 @@ def translate_xml(msg):
 			for i in [0,1,2,3,5,12]:
 				cand += (line[i],)
 			heimdal_candidates.append(cand)
-		heimdal_candidates = np.array(heimdal_candidates,dtype=cand_dtype)
+		heimdal_candidates = np.array(heimdal_candidates,dtype=CAND_DTYPE)
 		return flag,heimdal_candidates
 	elif flag == 'STOP':
 		return flag,None
@@ -692,7 +693,7 @@ eta = 2.37558703744e-5
 zeta = -1/289.9
 lmbda = -0.617335295908
 
-cand_dtype={'names':('SN','sample','time','H_w','H_dm','beam')
+CAND_DTYPE={'names':('SN','sample','time','H_w','H_dm','beam')
 		,'formats':('f4','i8','f4','i4','f4','i4')}
 
 

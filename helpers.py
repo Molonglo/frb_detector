@@ -221,7 +221,7 @@ def mod_index(event,t_crunch=False):
 	return np.sqrt((event**2).mean()-(event.mean())**2)/event.mean()
 
 
-def get_features(beam,t_sample,H_dm,H_w,file_directory):
+def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
 	timer = time.time()
 	fil = FilReader(file_directory)
 	t_smear = np.ceil(((31.25*8.3*H_dm)/(0.840)**3)/(fil.header.tsamp*1000000))
@@ -259,8 +259,8 @@ def get_features(beam,t_sample,H_dm,H_w,file_directory):
 	F2 = 100*event_med_sub[F2_ch].sum() / all_ch
 	F3 = 100*event_med_sub[F3_ch].sum() / all_ch
 	timer = time.time() - timer
-	return [int(beam),int(t_sample),float(F1),float(F2),float(F3),
-			np.sum(event_s-med),float(np.sum(event_left_s-med)),
+	return [int(beam),int(t_sample),sn,H_dm,H_w,float(F1),float(F2),float(F3),
+			float(np.sum(event_s-med)),float(np.sum(event_left_s-med)),
 			float(np.sum(event_right_s-med)),float(m),float(mean_offevent),
 			float(std_offevent),float(sig_0),float(sig_1),float(sig_2),ks_d,
 			ks_pvalue,sw_w,sw_pvalue,float(mod_ind),float(mod_indT),timer]

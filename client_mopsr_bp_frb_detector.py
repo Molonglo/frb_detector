@@ -81,7 +81,7 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(0.5)
-				logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
+			logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
 	def terminate_writer(self):
 		logging.info("Terminating writer thread")
 		time.sleep(0.2) #Give time to flush file
@@ -169,7 +169,7 @@ def terminate_all(proc_list,in_queue):
 
 
 def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
-		lock,training_file):
+		lock,training_file_dir):
 	""" Processing function to be multiprocessed """
 	logging.debug("%s Initiated, waiting for candidates" %os.getpid())
 	global n_detect
@@ -179,6 +179,7 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 			logging.info("%s recieved a poison pill, terminating...",
 					os.getpid())
 			break
+		sn = float(candidate['SN'])
 		beam = int(candidate['beam'])
 		H_dm = c_float(candidate['H_dm'])
 		H_w = c_int(candidate['H_w'])
@@ -189,14 +190,16 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 		logging.info('Searching directory: %s',search_dir)
 		file_directory = c_char_p(search_dir)		
 #		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
-		output_l = get_features(beam,candidate['sample'],candidate['H_dm'],
-				candidate['H_w'],search_dir)
+		output_l = get_features(beam,candidate['sample'],sn,
+				candidate['H_dm'],candidate['H_w'],search_dir)
 		output_l.append(utc.value)
 		lock.acquire()
 		logging.info('BP %s trying to write to training file',THIS_BPNODE)
 		c = str(output_l).strip("[]").replace(", "," ")+"\n"
 		logging.info(c)
+		training_file = open(training_file_dir,"a+")
 		training_file.write(c)
+		training_file.close()
 		lock.release()
 		continue
 		if not ftrs.isphonecall:
@@ -413,11 +416,14 @@ def main():
 	
 	# Spawning Processes
 	# ------------------
-	hdr = get_feature_names()
-	training_file = open("/home/wfarah/highres_test/feature_extractor/"+\
-			"online_training_set/BP"+str(THIS_BPNODE)+".txt","a+")
-	training_file.write(hdr)
-	atexit.register(gracefull_file_close,training_file)
+	training_file_dir = "/home/wfarah/highres_test/feature_extractor/"+\
+			"online_training_set/BP"+str(THIS_BPNODE)+".txt"
+	if not os.path.exists(training_file_dir):
+		hdr = get_feature_names()
+		training_file = open(training_file_dir)
+		training_file.write(hdr)
+		training_file.close()
+#	atexit.register(gracefull_file_close,training_file)
 	logging.debug("Spawning "+str(n_processes)+" processes")
 	in_queue = Queue()
 	rfi_writer_queue = Queue()
@@ -426,7 +432,7 @@ def main():
 	source_name = manager.Value(c_char_p,"")
 	process_list = [Process(target = process_candidate, 
 		args = (in_queue,utc,source_name,rfi_writer_queue,lock,
-			training_file)) for i in range(n_processes)]
+			training_file_dir)) for i in range(n_processes)]
 	for proc in process_list:
 		proc.start()
 	time.sleep(0.5)
