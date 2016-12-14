@@ -12,6 +12,51 @@ from sigpyproc.Readers import FilReader
 import scipy
 import time
 
+class Features:
+	def __init__(self,beam,sample,sn,dm,box,F1,F2,F3,event,left,right,
+			event_div,mean_off,std_off,sig_0,sig_1,sig_2,ks_d,ks_p,
+			sw_w,sw_p,Mod_ind,Mod_indT,time):
+		self.beam = beam
+		self.sample = sample
+		self.sn = sn
+		self.dm = dm
+		self.box = box
+		self.F1 = F1
+		self.F2 = F2
+		self.F3 = F3
+		self.event = event
+		self.left = left
+		self.right = right
+		self.event_div = event_div
+		self.mean_off = mean_off
+		self.std_off = std_off
+		self.sig_0 = sig_0
+		self.sig_1 = sig_1
+		self.ks_d = ks_d
+		self.ks_p = ks_p
+		self.sw_w = sw_w
+		self.sw_p = sw_p
+		self.Mod_ind = Mod_ind
+		self.Mod_indT = Mod_indT
+		self.time = time
+		self.utc = ""
+		if (F1 > 70) or (F2 > 70) or (F3 > 70):
+			self.isphonecall = True
+		else:
+			self.isphonecall = False
+	def str_fmt(self):
+		return str([self.beam,self.sample,self.sn.self.dm,self.box,self.F1,
+			self.F2,self.F3,self.event,self.left,self.right,self.event_div,
+			self.mean_off,self.std_off,self.sig_0,self.sig_1,self.sig_2,
+			self.ks_d,self.ks_p,self.sw_w,self.sw_p,self.Mod_ind,
+			self.Mod_indT,self.time,self.utc]).strip("[]").replace(", "," ")+\
+					"\n"
+
+
+"beam sample sn dm box F1 F2 F3 event left right event_div "+\
+		            "mean_off std_off sig_0 sig_1 sig_2 ks_d ks_p sw_w sw_p "+\
+					            "Mod_ind Mod_indT time utc\n"
+
 fil = FilReader("/home/wfarah/highres_1644/2016-11-10-04:27:01/FB/BEAM_177/2016-11-10-04:27:01.fil")
 fbottom = fil.header.ftop
 foff = fil.header.foff
@@ -259,14 +304,20 @@ def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
 	F2 = 100*event_med_sub[F2_ch].sum() / all_ch
 	F3 = 100*event_med_sub[F3_ch].sum() / all_ch
 	timer = time.time() - timer
-	return [int(beam),int(t_sample),sn,H_dm,H_w,float(F1),float(F2),float(F3),
-			float(np.sum(event_s-med)),float(np.sum(event_left_s-med)),
-			float(np.sum(event_right_s-med)),float(m),float(mean_offevent),
-			float(std_offevent),float(sig_0),float(sig_1),float(sig_2),ks_d,
-			ks_pvalue,sw_w,sw_pvalue,float(mod_ind),float(mod_indT),timer]
+	ftrs = Features(beam=int(beam),sample=int(t_sample),sn=sn,dm=H_dm,box=H_w,
+			F1=float(F1),F2=float(F2),F3=float(F3),
+			event=float(np.sum(event_s-med)),
+			left=float(np.sum(event_left_s-med)),
+			right=float(np.sum(event_right_s-med)),event_div=float(m),
+			mean_off=float(mean_offevent),std_off=float(std_offevent),
+			sig_0=float(sig_0),sig_1=float(sig_1),sig_2=float(sig_2),ks_d=ks_d,
+			ks_p=ks_pvalue,sw_w=sw_w,sw_p=sw_pvalue,Mod_ind=float(mod_ind),
+			Mod_indT=float(mod_indT),time=timer)
+	return ftrs
+
 
 
 def get_feature_names():
-	return "BEAM sample sn dm box F1 F2 F3 event left right event_div "+\
+	return "beam sample sn dm box F1 F2 F3 event left right event_div "+\
 			"mean_off std_off sig_0 sig_1 sig_2 ks_d ks_p sw_w sw_p "+\
 			"Mod_ind Mod_indT time utc\n"

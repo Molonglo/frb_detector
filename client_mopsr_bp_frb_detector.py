@@ -47,10 +47,8 @@ class RFIWriterThread(threading.Thread):
 				if self.rfi_file != None:
 					self.rfi_file.close()
 				break
-			beam,time_sample,width,f1,f2,f3 = rfi_str
 			try:
-				self.rfi_file.write("%i\t%i\t%i\t%.4f\t%.4f\t%.4f\n"\
-						%(beam,time_sample,width,f1,f2,f3))
+				self.rfi_file.write(rfi_str)
 			except ValueError:
 				pass
 	def change_file_name(self,utc):
@@ -95,8 +93,12 @@ class RFIWriterThread(threading.Thread):
 def sort_features(ftrs):
 	""" Function that takes in CandidateFeatures object, and returns a numpy
 	array that serves as an input for the classifier"""
-	sorted_features = np.array([ftrs.width,ftrs.sn/ftrs.sn_0,ftrs.F1,ftrs.F2,
-		ftrs.F3,ftrs.sn_rms,ftrs.n_rms_mask,ftrs.mod_ind,ftrs.mod_indT])
+#	sorted_features = np.array([ftrs.width,ftrs.sn/ftrs.sn_0,ftrs.F1,ftrs.F2,
+#		ftrs.F3,ftrs.sn_rms,ftrs.n_rms_mask,ftrs.mod_ind,ftrs.mod_indT])
+	sorted_features = np.array([ftrs.box,ftrs.F1,ftrs.F2,ftrs.F3,ftrs.event,
+		ftrs.left,ftrs.right,ftrs.event_div,ftrs.mean_off,ftrs.std_off,
+		ftrs.sig_0,ftrs.sig_1,ftrs.sig_2,ftrs.ks_d,ftrs.ks_p,ftrs.sw_w,
+		ftrs.sw_p,ftrs.Mod_ind,ftrs.Mod_indT])
 	return sorted_features.reshape(1,-1)
 
 
@@ -181,27 +183,24 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 			break
 		sn = float(candidate['SN'])
 		beam = int(candidate['beam'])
-		H_dm = c_float(candidate['H_dm'])
-		H_w = c_int(candidate['H_w'])
-		time_sample = c_int(candidate['sample'])
 		search_dir = FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
 				utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
 				'/'+utc.value+'.fil'
 		logging.info('Searching directory: %s',search_dir)
-		file_directory = c_char_p(search_dir)		
+#		file_directory = c_char_p(search_dir)		
 #		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
-		output_l = get_features(beam,candidate['sample'],sn,
+		ftrs = get_features(beam,candidate['sample'],sn,
 				candidate['H_dm'],candidate['H_w'],search_dir)
-		output_l.append(utc.value)
-		lock.acquire()
-		logging.info('BP %s trying to write to training file',THIS_BPNODE)
-		c = str(output_l).strip("[]").replace(", "," ")+"\n"
-		logging.info(c)
-		training_file = open(training_file_dir,"a+")
-		training_file.write(c)
-		training_file.close()
-		lock.release()
-		continue
+		ftrs.utc = utc.value
+#		lock.acquire()
+#		logging.info('BP %s trying to write to training file',THIS_BPNODE)
+#		c = str(output_l).strip("[]").replace(", "," ")+"\n"
+#		logging.info(c)
+#		training_file = open(training_file_dir,"a+")
+#		training_file.write(c)
+#		training_file.close()
+#		lock.release()
+#		continue
 		if not ftrs.isphonecall:
 			classifier_input = sort_features(ftrs)
 			isFRB, proba = classify(classifier_input,CLASSIFIER_THRESHOLD)
@@ -211,7 +210,7 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 				if DUMP_VOLTAGES:
 					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
 							source_name.value+\
-							'/BEAM_'+str(beam).zfill(3)+'/obs.header',\
+							'/FB/BEAM_'+str(beam).zfill(3)+'/obs.header',\
 							['TSAMP'])
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
 					send_dump_command(utc.value,sampling_time,
@@ -219,20 +218,18 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
-				rfi_writer_queue.put([beam,time_sample.value,\
-						ftrs.width,ftrs.F1,ftrs.F2,ftrs.F3])
+				rfi_writer_queue.put(ftrs.str_fmt())
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
-			rfi_writer_queue.put([beam,time_sample.value,\
-					2**candidate['H_w'],ftrs.F1,ftrs.F2,ftrs.F3])
+			rfi_writer_queue.put(ftrs.str_fmt())
 
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	disp_delay = ((31.25*0.0000083*candidate['H_dm'])/pow(0.840,3))
 	time_sec1 = candidate['sample']*sampling_time -\
-			max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
+			max(((2**ftrs.box/2)*sampling_time + disp_delay),0.5)
 	time_sec2 = candidate['sample']*sampling_time + disp_delay +\
-			max(((ftrs.width/2)*sampling_time + disp_delay),0.5)
+			max(((2**ftrs.box/2)*sampling_time + disp_delay),0.5)
 	fmt = "%Y-%m-%d-%H:%M:%S"
 	fmtms = "%Y-%m-%d-%H:%M:%S.%f"
 	cand_start_utc = datetime.datetime.strptime(utc,fmt) +\
@@ -255,7 +252,7 @@ def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	xml_cand_dm.text = str(candidate['H_dm'])
 	xml_cand_width = SubElement(dump_tag,'cand_width')
 	xml_cand_width.attrib['units'] = 'seconds'
-	xml_cand_width.text = str(ftrs.width*sampling_time)
+	xml_cand_width.text = str(2**ftrs.box*sampling_time)
 	xml_beam_number = SubElement(dump_tag,'beam_number')
 	xml_beam_number.text = str(candidate['beam'])
 	xml_utc_start = SubElement(dump_tag,'utc_start')
