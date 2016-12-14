@@ -115,7 +115,8 @@ def classify(features,threshold=0.5):
 	"""
 	y=clf.predict_proba(features)
 	y=y[0]
-	if y[1]>threshold:
+	ind = np.where(clf.classes_=="PULSES")[0]
+	if y[ind]>threshold:
 		return True,y[1]
 	return False,y[1]
 
@@ -208,10 +209,9 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 				logging.info(str(proba*100)+"%% chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
 				if DUMP_VOLTAGES:
-					obs_header = parse_cfg(FIL_FILE_DIR+'/'+utc.value+'/'+\
-							source_name.value+\
-							'/FB/BEAM_'+str(beam).zfill(3)+'/obs.header',\
-							['TSAMP'])
+					obs_header = parse_cfg(FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+							utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
+							'/obs.header',['TSAMP'])
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
 					send_dump_command(utc.value,sampling_time,
 							candidate,ftrs,proba)

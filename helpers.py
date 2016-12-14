@@ -32,6 +32,7 @@ class Features:
 		self.std_off = std_off
 		self.sig_0 = sig_0
 		self.sig_1 = sig_1
+		self.sig_2 = sig_2
 		self.ks_d = ks_d
 		self.ks_p = ks_p
 		self.sw_w = sw_w
@@ -45,7 +46,7 @@ class Features:
 		else:
 			self.isphonecall = False
 	def str_fmt(self):
-		return str([self.beam,self.sample,self.sn.self.dm,self.box,self.F1,
+		return str([self.beam,self.sample,self.sn,self.dm,self.box,self.F1,
 			self.F2,self.F3,self.event,self.left,self.right,self.event_div,
 			self.mean_off,self.std_off,self.sig_0,self.sig_1,self.sig_2,
 			self.ks_d,self.ks_p,self.sw_w,self.sw_p,self.Mod_ind,
