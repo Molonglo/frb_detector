@@ -45,13 +45,16 @@ class Features:
 			self.isphonecall = True
 		else:
 			self.isphonecall = False
-	def str_fmt(self):
-		return str([self.beam,self.sample,self.sn,self.dm,self.box,self.F1,
+	def str_fmt(self,pred_class):
+		#pred_class is either RFI or PULSES, as determined by the classifier
+		#pred_class is a str
+		out_str = str([self.beam,self.sample,self.sn,self.dm,self.box,self.F1,
 			self.F2,self.F3,self.event,self.left,self.right,self.event_div,
 			self.mean_off,self.std_off,self.sig_0,self.sig_1,self.sig_2,
 			self.ks_d,self.ks_p,self.sw_w,self.sw_p,self.Mod_ind,
 			self.Mod_indT,self.time,self.utc]).strip("[]").replace(", "," ")+\
 					"\n"
+		return str(prec_class)+" "+out_str
 
 
 "beam sample sn dm box F1 F2 F3 event left right event_div "+\

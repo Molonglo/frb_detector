@@ -113,12 +113,11 @@ def classify(features,threshold=0.5):
 		(bool): True if candidate is an FRB
 		prob (float): The probability of being an FRB
 	"""
-	y=clf.predict_proba(features)
-	y=y[0]
+	y=clf.predict_proba(features)[0]
 	ind = np.where(clf.classes_=="PULSES")[0]
 	if y[ind]>threshold:
-		return True,y[1]
-	return False,y[1]
+		return True,y[ind]
+	return False,y[ind]
 
 def process_monitor_thread(process_list,refresh_time=10):
 	"""Function that monitors processes, and reports if any is dead
@@ -215,13 +214,14 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
 					send_dump_command(utc.value,sampling_time,
 							candidate,ftrs,proba)
+				rfi_writer_queue.put(ftrs.str_fmt("PULSES"))
 			else:
 				logging.debug("Classified phone call: %i, %i",
 						beam,candidate[0])
-				rfi_writer_queue.put(ftrs.str_fmt())
+				rfi_writer_queue.put(ftrs.str_fmt("RFI"))
 		else:
 			logging.debug("Phone call: %i, %i",beam,candidate[0])
-			rfi_writer_queue.put(ftrs.str_fmt())
+			rfi_writer_queue.put(ftrs.str_fmt("RFI"))
 
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
