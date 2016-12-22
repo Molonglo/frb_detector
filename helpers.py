@@ -54,12 +54,8 @@ class Features:
 			self.ks_d,self.ks_p,self.sw_w,self.sw_p,self.Mod_ind,
 			self.Mod_indT,self.time,self.utc]).strip("[]").replace(", "," ")+\
 					"\n"
-		return str(prec_class)+" "+out_str
+		return str(pred_class)+" "+out_str
 
-
-"beam sample sn dm box F1 F2 F3 event left right event_div "+\
-		            "mean_off std_off sig_0 sig_1 sig_2 ks_d ks_p sw_w sw_p "+\
-					            "Mod_ind Mod_indT time utc\n"
 
 fil = FilReader("/home/wfarah/highres_1644/2016-11-10-04:27:01/FB/BEAM_177/2016-11-10-04:27:01.fil")
 fbottom = fil.header.ftop
@@ -322,6 +318,6 @@ def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
 
 
 def get_feature_names():
-	return "beam sample sn dm box F1 F2 F3 event left right event_div "+\
+	return "CLASS beam sample sn dm box F1 F2 F3 event left right event_div "+\
 			"mean_off std_off sig_0 sig_1 sig_2 ks_d ks_p sw_w sw_p "+\
 			"Mod_ind Mod_indT time utc\n"
