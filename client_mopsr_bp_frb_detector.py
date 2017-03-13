@@ -57,7 +57,7 @@ class RFIWriterThread(threading.Thread):
 			while time.time() - t < 12:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
-							"/"+utc+"/FB/rfi.list.BP"+str(self.bp_numb).zfill(2)
+							"/"+utc+"/FB/candidates.list.BP"+str(self.bp_numb).zfill(2)
 					self.rfi_file = open(f_dir,"a+")
 					logging.info("successfully opened '"+f_dir+\
 							"' for rfi logging")
@@ -72,7 +72,7 @@ class RFIWriterThread(threading.Thread):
 			while time.time() - t < 12:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
-							"/"+utc+"/FB/rfi.list.BP"+str(self.bp_numb).zfill(2)
+							"/"+utc+"/FB/candidates.list.BP"+str(self.bp_numb).zfill(2)
 					self.rfi_file = open(f_dir,"a+")
 					logging.info("successfully opened '"+f_dir+\
 							"' for rfi logging")
@@ -88,6 +88,13 @@ class RFIWriterThread(threading.Thread):
 	def empty_queue(self):
 		while not self.rfi_writer_queue.empty():
 			_ = self.rfi_writer_queue.get(timeout=0.1)
+	def close_file(self):
+		try:
+			self.rfi_file.close()
+		except AttributeError:
+			if self.rfi_file is None:
+				logging.critical("Candidate.list file is a NoneType")
+			logging.critical("Candidates.list file couldn't be closed")
 
 
 def sort_features(ftrs):
@@ -226,10 +233,11 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
 	disp_delay = ((31.25*0.0000083*candidate['H_dm'])/pow(0.840,3))
+	padded_delay = max(0.1*((2**ftrs.box/2)*sampling_time + disp_delay),0.1)
 	time_sec1 = candidate['sample']*sampling_time -\
-			max(((2**ftrs.box/2)*sampling_time + disp_delay),0.5)
+			padded_delay
 	time_sec2 = candidate['sample']*sampling_time + disp_delay +\
-			max(((2**ftrs.box/2)*sampling_time + disp_delay),0.5)
+			padded_delay
 	fmt = "%Y-%m-%d-%H:%M:%S"
 	fmtms = "%Y-%m-%d-%H:%M:%S.%f"
 	cand_start_utc = datetime.datetime.strptime(utc,fmt) +\
@@ -489,7 +497,7 @@ def main():
 		elif from_srv0 == 'STOP':
 			logging.info('Observation stopped')
 			writerThread.empty_queue()
-			writerThread.rfi_file.close()
+			writerThread.close_file()
 		else:
 			t_new = time.time()
 			candidate_list = cPickle.loads(from_srv0)
