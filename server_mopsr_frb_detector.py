@@ -642,6 +642,37 @@ def send_msg_to_bp(msg,bp_addrs):
 					" send '%s' signal to %s",hostname,port,msg,recv)
 
 
+def update_cfg():
+	"""
+	Updates the global variables if the config file changes
+	Returns the state of the pulsar monitor
+	"""
+	updated_cfg = parse_cfg(DADA_ROOT_SHARE+'frb_detector.cfg')
+	global SN_THRESHOLD, BOXCAR_THRESHOLD, DM_THRESHOLD, DM_WINDOW
+
+	if float(updated_cfg['SN_THRESHOLD']) != SN_THRESHOLD:
+		SN_THRESHOLD = float(updated_cfg['SN_THRESHOLD'])
+		logging.info("Config file updated: SN_THRESHOLD = %f",
+				SN_THRESHOLD)
+    
+	if float(updated_cfg['BOXCAR_THRESHOLD']) != BOXCAR_THRESHOLD:
+		BOXCAR_THRESHOLD = float(updated_cfg['BOXCAR_THRESHOLD'])
+		logging.info("Config file updated: BOXCAR_THRESHOLD = %f",
+				BOXCAR_THRESHOLD)
+    
+	if float(updated_cfg['DM_THRESHOLD']) != DM_THRESHOLD:
+		DM_THRESHOLD = float(updated_cfg['DM_THRESHOLD'])
+		logging.info("Config file updated: DM_THRESHOLD = %f",
+				DM_THRESHOLD)
+	if float(updated_cfg['DM_WINDOW']) != DM_WINDOW:
+		DM_WINDOW = float(updated_cfg['DM_WINDOW'])
+		logging.info("Config file updated: DM_WINDOW = %f",
+				DM_WINDOW)
+	
+	return updated_cfg['PULSAR_MONITOR']
+
+
+
 # --------
 # Globals:
 # --------
@@ -818,7 +849,16 @@ def main():
 			continue
 		start_utc = obsInfo['UTC_START']
 		logging.info("Received a new start UTC: %s",start_utc)
-		
+		tmp = update_cfg()
+		if tmp == "yes":
+			tmp = True
+		elif tmp == "no":
+			tmp = False
+		if tmp != pulsar_monitor_on:
+			pulsar_monitor_on = tmp
+			logging.info("Config file updated, pulsar monitor is now: %s",
+					pulsar_monitor_on)
+
 		for i in xrange(30):
 			try:
 				pulsar_file = open(MOPSR_CFG['SERVER_RESULTS_DIR']+'/'+\

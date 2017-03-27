@@ -266,9 +266,47 @@ def mod_index(event,t_crunch=False):
 	return np.sqrt((event**2).mean()-(event.mean())**2)/event.mean()
 
 
+def MAD(filterbank_block,ax=1):
+	return np.median(abs(filterbank_block.T - np.median(filterbank_block,axis=ax)).T, axis=ax)
+
+def normalize(time_series):
+	return time_series/(1.4826*MAD(time_series,ax=None))
+
+def remove_baseline(time_series):
+	return time_series - np.median(time_series)
+
+
+def my_snr(t_sample,H_dm,H_w,fil_directory):
+	"""
+	
+	Implemented for computing snr on the incoherent beam
+	
+	"""
+	fil = FilReader(fil_directory)
+	t_smear = np.ceil(((31.25*8.3*H_dm)/(0.840)**3)/(fil.header.tsamp*1000000))
+	w = 2**H_w
+	block = fil.readBlock(int(t_sample-3.5*w),int(t_smear+6.5*w)+\
+			int(1/fil.header.tsamp)) #Add 1 second to the extraction time
+	disp_block = block.dedisperse(H_dm)
+	t = disp_block.sum(axis=0)
+	t = remove_baseline(t)
+	time_series = normalize(t)
+
+	pulse = time_series[3*w:4*w]
+	snr = pulse.sum()/np.sqrt(w)
+
+#	snr = pulse.sum()
+	return float(snr)
+
+
+
 def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
 	timer = time.time()
-	fil = FilReader(file_directory)
+	try:
+		fil = FilReader(file_directory)
+	except IOError:
+		logging.critical(file_directory+" Not available, skipping candidate...")
+		return None
 	t_smear = np.ceil(((31.25*8.3*H_dm)/(0.840)**3)/(fil.header.tsamp*1000000))
 	w = 2**H_w
 	block = fil.readBlock(int(t_sample-3.5*w),int(t_smear+6.5*w))

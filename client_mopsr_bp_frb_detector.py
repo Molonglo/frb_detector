@@ -18,7 +18,7 @@ import socket
 import cPickle
 import argparse
 from helpers import parse_cfg,client_control_monitor,daemonize,sigHandler
-from helpers import create_xml_elem,delpid
+from helpers import create_xml_elem,delpid,my_snr
 import signal
 import datetime
 
@@ -54,7 +54,7 @@ class RFIWriterThread(threading.Thread):
 	def change_file_name(self,utc):
 		if self.rfi_file == None: #For first obs
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 20:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
 							"/"+utc+"/FB/candidates.list.BP"+str(self.bp_numb).zfill(2)
@@ -64,12 +64,12 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
+			logging.critical("Couldn't open "+f_dir+" after 20 sec of trying")
 		else:
 #			self.empty_queue()
 #			self.rfi_file.close()
 			t = time.time()
-			while time.time() - t < 12:
+			while time.time() - t < 20:
 				try:
 					f_dir = FIL_FILE_DIR+"/BP"+str(self.bp_numb).zfill(2)+\
 							"/"+utc+"/FB/candidates.list.BP"+str(self.bp_numb).zfill(2)
@@ -79,7 +79,7 @@ class RFIWriterThread(threading.Thread):
 					return
 				except IOError:
 					time.sleep(0.5)
-			logging.critical("Couldn't open "+f_dir+" after 12 sec of trying")
+			logging.critical("Couldn't open "+f_dir+" after 20 sec of trying")
 	def terminate_writer(self):
 		logging.info("Terminating writer thread")
 		time.sleep(0.2) #Give time to flush file
@@ -177,6 +177,60 @@ def terminate_all(proc_list,in_queue):
 			os.kill(proc.pid,signal.SIGKILL)
 
 
+def incoherent_beam_proc(inc_beam_port):
+	"""
+	args:
+		inc_beam_port (int): Port number to communicate incoherent beam
+			statistics
+	
+	Should receive a pickled dictionary with entries:
+		- utc
+		- t_sample
+		- H_dm
+		- H_w
+		- source_name
+	Add 'EOF' to the end of the serialized dictionary to insure stopping
+	broadcast
+
+	Sends back a pickled dictionary of incoherent beam statistics
+	"""
+	logging.debug("Innitialising incoherent beam thread")
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+	host = socket.gethostname().split(".")[0]
+	s.bind((host,inc_beam_port))
+	s.listen(10)
+	logging.debug("Binded to %s %s",host,inc_beam_port)
+	while True:
+		#Accept connection from any bf node
+		conn,addr = s.accept()
+		msg = recvall(conn)
+		req_info = cPickle.loads(msg)
+		logging.debug("Received signal %s from %s",req_info,conn.getpeername())
+		search_dir = FIL_FILE_DIR+'/BP00/'+req_info['utc']+\
+				'/'+req_info['source_name']+'/BEAM_001/'+\
+				req_info['utc']+'.fil'
+		t_sample = req_info['t_sample']
+		H_dm = req_info['H_dm']
+		H_w = req_info['H_w']
+		#compute SNR
+		logging.debug("Computed SNR, trying to send it back")
+		snr = my_snr(t_sample, H_dm, H_w, search_dir)
+		response_dict = {'snr':snr}
+		#Send the SNR back to respective node
+		conn.sendall(cPickle.dumps(response_dict)+"EOF")
+		logging.debug("SNR sent")
+
+def get_snr_incoherent(t_sample, H_dm, H_w, utc, search_dir):
+	d = {'utc':utc,'t_sample':t_sample,'H_dm':H_dm,'H_w':H_w,
+			'source_name':'FB'}
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.connect((INCOHERENT_BEAM_HOST,INCOHERENT_BEAM_PORT))
+	s.send(cPickle.dumps(d)+"EOF")
+	resp = cPickle.loads(recvall(s))
+	return resp['snr']
+
+
 def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 		lock,training_file_dir):
 	""" Processing function to be multiprocessed """
@@ -198,6 +252,8 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 #		ftrs = get_features(time_sample,H_dm,H_w,file_directory)
 		ftrs = get_features(beam,candidate['sample'],sn,
 				candidate['H_dm'],candidate['H_w'],search_dir)
+		if not ftrs:
+			return
 		ftrs.utc = utc.value
 #		lock.acquire()
 #		logging.info('BP %s trying to write to training file',THIS_BPNODE)
@@ -214,20 +270,33 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 			if isFRB:
 				logging.info(str(proba*100)+"%% chance FRB! Beam: %i, "+\
 						"sample: %i",beam,candidate['sample'])
+				cand_my_snr = my_snr(candidate['sample'],
+						candidate['H_dm'], candidate['H_w'], search_dir)
+				inco_my_snr = get_snr_incoherent(candidate['sample'],
+						candidate['H_dm'],candidate['H_w'], utc.value,
+						search_dir)
+				ratio = cand_my_snr / inco_my_snr
+
+				logging.debug("SNR in current beam: %s",cand_my_snr)
+				logging.debug("SNR in incoherent beam: %s",inco_my_snr)
 				if DUMP_VOLTAGES:
-					obs_header = parse_cfg(FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
-							utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
-							'/obs.header',['TSAMP'])
-					sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
-					send_dump_command(utc.value,sampling_time,
-							candidate,ftrs,proba)
-				rfi_writer_queue.put(ftrs.str_fmt("PULSES"))
+						if ratio > 1:
+								obs_header = parse_cfg(FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+												utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
+												'/obs.header',['TSAMP'])
+								sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
+								send_dump_command(utc.value,sampling_time,
+												candidate,ftrs,proba)
+				if ratio > 1:
+						rfi_writer_queue.put(ftrs.str_fmt("PULSES"))
+				else:
+						rfi_writer_queue.put(ftrs.str_fmt("THRSH"))
 			else:
 				logging.debug("Classified phone call: %i, %i",
-						beam,candidate[0])
+						beam,candidate['sample'])
 				rfi_writer_queue.put(ftrs.str_fmt("RFI"))
 		else:
-			logging.debug("Phone call: %i, %i",beam,candidate[0])
+			logging.debug("Phone call: %i, %i",beam,candidate['sample'])
 			rfi_writer_queue.put(ftrs.str_fmt("RFI"))
 
 
@@ -300,13 +369,36 @@ def recvall(the_conn):
 	while True:
 		data = the_conn.recv(16384)
 		if not data: break
+		if data[-3:] == "EOF":
+			data = data[:-3]
+			total_data.append(data)
+			break
 		total_data.append(data)
 	return ''.join(total_data)
-
 
 def gracefull_file_close(f):
 	logging.info("Closing file: %s",f.name)
 	f.close()
+
+def update_cfg(): 
+	"""
+	Updates the cfg global variables
+	"""
+	global CLASSIFIER_THRESHOLD, DUMP_VOLTAGES
+	updated_cfg = parse_cfg(DADA_ROOT_SHARE+'frb_detector.cfg')
+	
+	if float(updated_cfg['CLASSIFIER_THRESHOLD']) != CLASSIFIER_THRESHOLD:
+		CLASSIFIER_THRESHOLD = float(updated_cfg['CLASSIFIER_THRESHOLD'])
+		logging.info("Config file updated, CLASSIFIER_THRESHOLD = %f",
+				CLASSIFIER_THRESHOLD)
+	if updated_cfg['DUMP_VOLTAGES'] == 'yes' and\
+			DUMP_VOLTAGES == False:
+		DUMP_VOLTAGES = True
+		logging.info("Config file updated, switched dump voltages to true")
+	if updated_cfg['DUMP_VOLTAGES'] == 'no' and\
+			DUMP_VOLTAGES == True:
+		DUMP_VOLTAGES = False
+		logging.info("Config file update, switched dump voltages to false")
 
 
 # GLOBALS
@@ -322,10 +414,13 @@ MOPSR_CFG_DIR = DADA_ROOT_SHARE+'mopsr.cfg'
 MOPSR_BP_CFG_DIR = DADA_ROOT_SHARE+'mopsr_bp.cfg'
 MOPSR_CFG = parse_cfg(MOPSR_CFG_DIR,["CLIENT_CONTROL_DIR","CLIENT_LOG_DIR",
 "FRB_DETECTOR_BASEPORT","FRB_DETECTOR_DUMPPORT","SERVER_HOST",
-"CLIENT_RECORDING_DIR"])
+"CLIENT_RECORDING_DIR","FRB_DETECTOR_INCOHERENT"])
 SERVER_HOST = MOPSR_CFG["SERVER_HOST"]
 BASEPORT = int(MOPSR_CFG["FRB_DETECTOR_BASEPORT"])
 DUMPPORT = int(MOPSR_CFG["FRB_DETECTOR_DUMPPORT"])
+INCOHERENT_BEAM_PORT = int(MOPSR_CFG[
+	"FRB_DETECTOR_INCOHERENT"])
+INCOHERENT_BEAM_HOST = 'mpsr-bf00'
 
 CLASSIFIER_THRESHOLD = float(FRB_DETECTOR_CFG['CLASSIFIER_THRESHOLD'])
 if FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'yes':
@@ -362,6 +457,7 @@ def main():
 	verbose = args.verbose
 	global THIS_BPNODE
 	THIS_BPNODE = args.bpnode
+
 	dry_run = args.test
 #	n_processes = args.nproc
 	daemon = args.daemonize
@@ -392,6 +488,8 @@ def main():
 				format='(%(levelname)s) [%(asctime)s.%(msecs)03d]:'\
 						+'\t%(message)s',
 				datefmt='%m-%d-%Y-%H:%M:%S')
+	
+	atexit.register(logging.shutdown)
 	logging.info("BP master script initializing")
 #	logging.info("Main thread pid: %s",pid)
 	logging.info("Classifier threshold: %s",CLASSIFIER_THRESHOLD)
@@ -404,6 +502,15 @@ def main():
 		logging.debug("Writing pid file (pid %s)",pid)
 		file(pidfile,'w+').write("%s\n" % pid)
 
+	#Special process for the incoherent beam
+	#---------------------------------------
+
+	if int(THIS_BPNODE) == 0:
+		inc_beam_process = Process(name = 'Incoherent beam process',
+				target = incoherent_beam_proc, args = (INCOHERENT_BEAM_PORT,))
+		inc_beam_process.start()
+		atexit.register(inc_beam_process.terminate)
+	
 	controlThread = threading.Thread(name = 'controlThread',
 			target = client_control_monitor,
 			args=(client_ctrl_dir,script_name,THIS_BPNODE))
@@ -467,9 +574,9 @@ def main():
 		host = MOPSR_BP_CFG['BP_'+str(THIS_BPNODE)]
 	else:
 		host = MOPSR_BP_CFG['BP_'+str(THIS_BPNODE)]
-	logging.debug("Host name: %s",host)
+	logging.debug("Host name: %s, This BP node: %s",host,THIS_BPNODE)
 	port_no = BASEPORT + 100 + (int(THIS_BPNODE)+1)
-	assert host == socket.gethostname().split(".")[0]
+#	assert host == socket.gethostname().split(".")[0]
 	s.bind((host,port_no))
 	s.listen(10)
 	logging.debug("listening for connection from: %s, %i",host,port_no)
@@ -481,6 +588,7 @@ def main():
 		conn,addr = s.accept()
 		from_srv0 = recvall(conn)
 		if from_srv0[:3] == 'utc':
+			update_cfg()
 			if in_queue.qsize() != 0:
 				logging.warning("Flushin candidates for new utc")
 				while in_queue.qsize () != 0:
@@ -524,6 +632,6 @@ if __name__ == "__main__":
 		elif e.code == "Fork #2":
 			logging.info("Exited from second parent")
 		else:
-			logging.exception("")
+			logging.exception("SystemExit")
 	except:
-		logging.exception("")
+		logging.exception("Exception")
