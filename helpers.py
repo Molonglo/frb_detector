@@ -8,9 +8,60 @@ import logging
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 sys.path.append("/home/observer/Python/dev/sigpyproc/lib/python")
-from sigpyproc.Readers import FilReader
+from sigpyproc.Readers import FilReader,FilterbankBlock
 import scipy
 import time
+import struct
+
+def parse_cfg(cfg_file,tags=None):
+    """Function that returns config file with given tags as dictionar
+
+    Args:
+        cfg_file (str): full directory to config file
+        tags (list): list of tags to search the cgf_file
+
+    Returns:
+        config_dict (dict): dictionary with keys given in tags, and values
+                            extracted from cfg_file. If one tag doesn't exist,
+                            value corresponded will be None, else value is of
+                            type str, or list if multiple values exist for 
+                            same key.
+    """
+    if tags == None:
+        tags = []
+        with open(cfg_file) as o:
+            for line in o:
+                if line[0] in ["\n","#"]: continue
+                tags.append(line.split()[0])
+    config_dict = {}
+    with open(cfg_file) as o:
+        for line in o:
+            if line[0] in ["\n","#"]: continue
+            for tag in tags:
+                if tag in line:
+                    i = line.split()
+                    assert tag == i[0]
+                    config_dict[tag] = []
+                    for ii in i[1:]:
+                        if "#" in ii: break
+                        config_dict[tag].append(ii)
+                    if len(config_dict[tag]) == 1:
+                        config_dict[tag] = config_dict[tag][0]
+                    tags.remove(tag)
+    for tag in tags:
+        logging.warning("Couldn't parse <"+tag+"> from "+cfg_file)
+        config_dict[tag] = None
+    return config_dict
+
+# GLOBALS
+# -------
+DADA_ROOT_SHARE = os.environ['DADA_ROOT']+'/share/'
+
+
+# Loading config files, and initializing loggers
+# ----------------------------------------------
+FRB_DETECTOR_CFG = parse_cfg(DADA_ROOT_SHARE+'frb_detector.cfg')
+
 
 class Features:
     def __init__(self,beam,sample,sn,dm,box,F1,F2,F3,event,left,right,
@@ -55,6 +106,42 @@ class Features:
             self.Mod_indT,self.time,self.utc]).strip("[]").replace(", "," ")+\
                     "\n"
         return str(pred_class)+" "+out_str
+
+    def sort_features(self):
+        """ 
+        Function that takes in CandidateFeatures object, and returns a numpy
+        array that serves as an input for the classifier
+        """
+        sorted_features = np.array([self.box,self.F1,self.F2,self.F3,self.event,
+            self.left,self.right,self.event_div,self.mean_off,self.std_off,
+            self.sig_0,self.sig_1,self.sig_2,self.ks_d,self.ks_p,self.sw_w,
+            self.sw_p,self.Mod_ind,self.Mod_indT])
+        return sorted_features.reshape(1,-1)
+
+    def __str__(self):
+        out_str = str([self.beam,self.sample,self.sn,self.dm,self.box,self.F1,
+            self.F2,self.F3,self.event,self.left,self.right,self.event_div,
+            self.mean_off,self.std_off,self.sig_0,self.sig_1,self.sig_2,
+            self.ks_d,self.ks_p,self.sw_w,self.sw_p,self.Mod_ind,
+            self.Mod_indT,self.time,self.utc]).strip("[]").replace(", "," ")
+        return out_str
+    def __repr__(self):
+        return self.__str__()
+
+
+class FBankBlock(FilterbankBlock):
+    def toFile(self,filename=None,back_compatible=True):
+        if filename is None:
+            filename = "%s_%d_to_%d.fil"%(self.header.basename,self.header.tstart,
+                                                      self.header.mjdAfterNsamps(self.shape[1]))
+        new_header = {"nbits":8}
+        out_file = self.header.prepOutfile(filename,new_header,nbits=8,back_compatible=back_compatible)
+        out_file.cwrite(self.transpose().ravel())
+        return filename
+    def __new__(self,*args,**kwargs):
+        obj = FilterbankBlock.__new__(FBankBlock,*args,**kwargs)
+        obj = obj.astype("uint8")
+        return obj
 
 
 fil = FilReader("/home/wfarah/TEMPLATE/2017-04-25-04:34:46.fil")
@@ -135,45 +222,6 @@ def daemonize(pidfile, logfile):
 
 
 
-def parse_cfg(cfg_file,tags=None):
-    """Function that returns config file with given tags as dictionar
-
-    Args:
-        cfg_file (str): full directory to config file
-        tags (list): list of tags to search the cgf_file
-
-    Returns:
-        config_dict (dict): dictionary with keys given in tags, and values
-                            extracted from cfg_file. If one tag doesn't exist,
-                            value corresponded will be None, else value is of
-                            type str, or list if multiple values exist for 
-                            same key.
-    """
-    if tags == None:
-        tags = []
-        with open(cfg_file) as o:
-            for line in o:
-                if line[0] in ["\n","#"]: continue
-                tags.append(line.split()[0])
-    config_dict = {}
-    with open(cfg_file) as o:
-        for line in o:
-            if line[0] in ["\n","#"]: continue
-            for tag in tags:
-                if tag in line:
-                    i = line.split()
-                    assert tag == i[0]
-                    config_dict[tag] = []
-                    for ii in i[1:]:
-                        if "#" in ii: break
-                        config_dict[tag].append(ii)
-                    if len(config_dict[tag]) == 1:
-                        config_dict[tag] = config_dict[tag][0]
-                    tags.remove(tag)
-    for tag in tags:
-        logging.warning("Couldn't parse <"+tag+"> from "+cfg_file)
-        config_dict[tag] = None
-    return config_dict
 
 
 def control_monitor(control_dir,script_name):
@@ -300,16 +348,70 @@ def my_snr(t_sample,H_dm,H_w,fil_directory):
 
 
 
-def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
+def saveFBank(fbank,t_sample,H_w,H_dm,save_dir):
+    if isinstance(fbank,str):
+        try:
+            fil = FilReader(fbank)
+        except Exception as e:
+            logging.critical("saveFBank ==> %s",e)
+            return
+
+        t_smear = np.ceil(((31.25*8.3*H_dm)/(0.840)**3)/(fil.header.tsamp*1000000))
+        w = 2**H_w
+        try:
+            block = fil.readBlock(int(t_sample-3.5*w),int(t_smear+6.5*w))
+        except IOError as e:
+            logging.critical("saveFBank ==>i %s",e)
+            return
+    elif isinstance(fbank,FilterbankBlock):
+        block = fbank
+    else:
+        logging.critical("saveFBank ==> input fbank: %s is neither a str, nor a FilterbankBlock object (type: %s)",fbank,type(fbank))
+        return
+    block = FBankBlock(block,block.header)
+    block.toFile(save_dir)
+#    return block
+
+
+
+def get_features(beam,t_sample,sn,H_dm,H_w,file_directory,return_block = False):
     timer = time.time()
     try:
         fil = FilReader(file_directory)
     except IOError:
         logging.critical(file_directory+" Not available, skipping candidate...")
+        if return_block:
+            return None,None
         return None
+    except struct.error:
+        logging.critical(file_directory+" is corrupted, maybe empty?")
+        if return_block:
+            return None,None
+        return None
+    if fil.header.nchans != int(FRB_DETECTOR_CFG['NCHAN']):
+        logging.critical("nchan of filterbank %i != %i" %(fil.header.nchans,int(FRB_DETECTOR_CFG['NCHAN'])))
+        if return_block:
+            return None,None
+        return None
+
     t_smear = np.ceil(((31.25*8.3*H_dm)/(0.840)**3)/(fil.header.tsamp*1000000))
     w = 2**H_w
-    block = fil.readBlock(int(t_sample-3.5*w),int(t_smear+6.5*w))
+    try:
+        block = fil.readBlock(int(t_sample-3.5*w),int(t_smear+6.5*w))
+    except IOError as e:
+        logging.critical("Candidate is right in the start of the FBank. "+\
+                "t_sample = %i, t_smear = %f, w = %i. Skipping candidate",
+                t_sample,t_smear,w)
+        if return_block:
+            return None,None
+        return None
+    except ValueError as e:
+        logging.critical("Caught the ValueError again, listing some relevant information")
+        logging.critical("Search dir: %s" %file_directory)
+        logging.critical("Filterbank header: %s" %fil.header)
+        if return_block:
+            return None,None
+        return None
     disp_block = block.dedisperse(H_dm)
     t = disp_block.sum(axis=0)
     event = disp_block[:,3*w:4*w]
@@ -351,6 +453,8 @@ def get_features(beam,t_sample,sn,H_dm,H_w,file_directory):
             sig_0=float(sig_0),sig_1=float(sig_1),sig_2=float(sig_2),ks_d=ks_d,
             ks_p=ks_pvalue,sw_w=sw_w,sw_p=sw_pvalue,Mod_ind=float(mod_ind),
             Mod_indT=float(mod_indT),time=timer)
+    if return_block:
+        return ftrs,block
     return ftrs
 
 

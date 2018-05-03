@@ -17,7 +17,7 @@ import logging
 import socket
 import cPickle
 import argparse
-from helpers import parse_cfg,client_control_monitor,daemonize,sigHandler
+from helpers import parse_cfg,client_control_monitor,daemonize,sigHandler,saveFBank
 from helpers import create_xml_elem,delpid,my_snr
 import signal
 import datetime
@@ -232,6 +232,57 @@ def get_snr_incoherent(t_sample, H_dm, H_w, utc, search_dir):
     return resp['snr']
 
 
+
+def pulsar_pulse_classifier(utc,host,port):
+    logging.info("pulsar_pulse_classifier => loaded. Listening on (%s, %s)",
+            host,port)
+    while True:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+        s.bind((host,port))
+        s.listen(1)
+        conn, addr = s.accept()
+        msg = recvall(conn)
+        logging.info("pulsar_pulse_classifier => Recieved msg from (%s, %s)",
+                host,port)
+        pulsar_pulse_candidate,to_save = cPickle.loads(msg)
+
+        sn = float(pulsar_pulse_candidate['SN'])
+        beam = int(pulsar_pulse_candidate['beam'])
+        H_dm = float(pulsar_pulse_candidate['H_dm'])
+        H_w = int(pulsar_pulse_candidate['H_w'])
+        sample = int(pulsar_pulse_candidate['sample'])
+        base_dir = FIL_FILE_DIR +'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+                utc.value+'/FB/BEAM_'+str(beam).zfill(3)
+        search_dir = base_dir + '/'+utc.value+'.fil'
+        #logging.info("pulsar_pulse_classifier => searching directory: %s" %search_dir)
+        ftrs = get_features(beam,sample,sn,
+                H_dm,H_w,search_dir)
+        if not ftrs:
+            logging.critical("pulsar_pulse_classifier => Got non features, skipping candidate")
+            conn.sendall(str(-2)+"EOF")
+            continue
+
+        ftrs.utc = utc.value
+        if not ftrs.isphonecall:
+            classifier_input = sort_features(ftrs)
+            _ , proba = classify(classifier_input,CLASSIFIER_THRESHOLD)
+            logging.info("pulsar_pulse_classifier => pulse at sample %i classified, probability: %f",
+                    pulsar_pulse_candidate['sample'],proba)
+            conn.sendall(str(proba)+"EOF")
+        else:
+            logging.info("pulsar_pulse_classifier => pulse at sample %i is threshold phonecall",
+                    pulsar_pulse_candidate['sample'])
+            conn.sendall("-1"+"EOF")
+        if to_save and FRB_DETECTOR_CFG["SAVE_FIL"].upper() in ["YES","TRUE"]:
+            out_name = base_dir + "/PULSE_" + utc.value + "_" + str(sample) + ".fil"
+            saveFBank(search_dir,sample,H_w,H_dm,out_name)
+
+        conn.close()
+            
+
+
+
 def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
         lock,training_file_dir):
     """ Processing function to be multiprocessed """
@@ -245,16 +296,19 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
             break
         sn = float(candidate['SN'])
         beam = int(candidate['beam'])
-        search_dir = FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
-                utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
-                '/'+utc.value+'.fil'
-        logging.info('Searching directory: %s',search_dir)
+        sample = int(candidate['sample'])
+        base_dir = FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+                utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)
+        search_dir = base_dir + '/'+utc.value+'.fil'
+        logging.info('Searching directory: %s, candidate ==> sample: %s, width: %s',
+                search_dir,candidate['sample'],candidate['H_w'])
 #        file_directory = c_char_p(search_dir)        
-#        ftrs = get_features(time_sample,H_dm,H_w,file_directory)
         ftrs = get_features(beam,candidate['sample'],sn,
                 candidate['H_dm'],candidate['H_w'],search_dir)
         if not ftrs:
-            return
+            logging.info("Skipping candidate on sample = %s, and beam = %s",
+                    candidate['sample'],beam)
+            continue
         ftrs.utc = utc.value
 #        lock.acquire()
 #        logging.info('BP %s trying to write to training file',THIS_BPNODE)
@@ -281,21 +335,29 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
                 logging.debug("SNR in current beam: %s",cand_my_snr)
                 logging.debug("SNR in incoherent beam: %s",inco_my_snr)
                 if DUMP_VOLTAGES:
-                        if ratio > 1:
-                                obs_header = parse_cfg(FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
-                                                utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
-                                                '/obs.header',['TSAMP'])
-                                sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
-                                send_dump_command(utc.value,sampling_time,
-                                                candidate,ftrs,proba)
-                if ratio > 1:
-                        rfi_writer_queue.put(ftrs.str_fmt("PULSES"))
-                else:
-                        rfi_writer_queue.put(ftrs.str_fmt("THRSH"))
+                    if cand_my_snr > inco_my_snr:
+                        obs_header = parse_cfg(FIL_FILE_DIR+'/BP'+str(THIS_BPNODE).zfill(2)+'/'+\
+                                        utc.value+'/'+source_name.value+'/BEAM_'+str(beam).zfill(3)+\
+                                        '/obs.header',['TSAMP'])
+                        sampling_time = float(obs_header['TSAMP'])/10**6 # in seconds
+                        send_dump_command(utc.value,sampling_time,
+                                        candidate,ftrs,proba)
+                        out_name = base_dir + "/FRB_" + utc.value + "_" + str(sample) + ".fil"
+                        saveFBank(search_dir,sample,candidate['H_w'],
+                                candidate['H_dm'],out_name)
+                    if cand_my_snr > inco_my_snr:
+                            rfi_writer_queue.put(ftrs.str_fmt("PULSES"))
+                    else:
+                            rfi_writer_queue.put(ftrs.str_fmt("THRSH"))
             else:
-                logging.debug("Classified phone call: %i, %i",
-                        beam,candidate['sample'])
+                logging.debug("Classified phone call: %i, %i, with probability: %f",
+                        beam,candidate['sample'],proba)
                 rfi_writer_queue.put(ftrs.str_fmt("RFI"))
+                if len(os.listdir(base_dir)) < 6 and\
+                        FRB_DETECTOR_CFG['SAVE_FIL'].upper() in ["YES","TRUE"]:
+                    out_name = base_dir + "/RFI_" + utc.value + "_" + str(sample) + ".fil"
+                    saveFBank(search_dir,sample,candidate['H_w'],
+                            candidate['H_dm'],out_name)
         else:
             logging.debug("Phone call: %i, %i",beam,candidate['sample'])
             rfi_writer_queue.put(ftrs.str_fmt("RFI"))
@@ -303,11 +365,11 @@ def process_candidate(in_queue,utc,source_name,rfi_writer_queue,
 
 def send_dump_command(utc,sampling_time,candidate,ftrs,proba):
     disp_delay = ((31.25*0.0000083*candidate['H_dm'])/pow(0.840,3))
-    padded_delay = max(0.1*((2**ftrs.box/2)*sampling_time + disp_delay),0.1)
+    padded_delay = max(0.1*((2**ftrs.box/2)*sampling_time + disp_delay),0.2)
     time_sec1 = candidate['sample']*sampling_time -\
             padded_delay
     time_sec2 = candidate['sample']*sampling_time + disp_delay +\
-            padded_delay
+            2*padded_delay
     fmt = "%Y-%m-%d-%H:%M:%S"
     fmtms = "%Y-%m-%d-%H:%M:%S.%f"
     cand_start_utc = datetime.datetime.strptime(utc,fmt) +\
@@ -420,6 +482,7 @@ MOPSR_CFG = parse_cfg(MOPSR_CFG_DIR,["CLIENT_CONTROL_DIR","CLIENT_LOG_DIR",
 "CLIENT_RECORDING_DIR","FRB_DETECTOR_INCOHERENT"])
 SERVER_HOST = MOPSR_CFG["SERVER_HOST"]
 BASEPORT = int(MOPSR_CFG["FRB_DETECTOR_BASEPORT"])
+
 DUMPPORT = int(MOPSR_CFG["FRB_DETECTOR_DUMPPORT"])
 INCOHERENT_BEAM_PORT = int(MOPSR_CFG[
     "FRB_DETECTOR_INCOHERENT"])
@@ -427,6 +490,8 @@ INCOHERENT_BEAM_PORT = int(MOPSR_CFG[
 INCOHERENT_BEAM_HOST = CORNERTURN_CFG["RECV_0"]
 
 CLASSIFIER_THRESHOLD = float(FRB_DETECTOR_CFG['CLASSIFIER_THRESHOLD'])
+PULSAR_BASEPORT = int(FRB_DETECTOR_CFG['PULSAR_PULSE_CLASS_BASEPORT'])
+
 if FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'yes':
     DUMP_VOLTAGES = True
 elif FRB_DETECTOR_CFG['DUMP_VOLTAGES'] == 'no':
@@ -580,6 +645,12 @@ def main():
         host = MOPSR_BP_CFG['BP_'+str(THIS_BPNODE)]
     logging.debug("Host name: %s, This BP node: %s",host,THIS_BPNODE)
     port_no = BASEPORT + 100 + (int(THIS_BPNODE)+1)
+    pulsar_port_no = PULSAR_BASEPORT + 1 + (int(THIS_BPNODE)+1) 
+
+    pulsar_classifier_proc = Process(target = pulsar_pulse_classifier,
+            args = (utc,host,pulsar_port_no))
+    pulsar_classifier_proc.start()
+    atexit.register(pulsar_classifier_proc.terminate)
 #    assert host == socket.gethostname().split(".")[0]
     s.bind((host,port_no))
     s.listen(10)
@@ -608,6 +679,10 @@ def main():
             sys.exit(1)
         elif from_srv0 == 'STOP':
             logging.info('Observation stopped')
+            if in_queue.qsize() != 0:
+                logging.warning('%i candidates were flushed out after obs ended' %in_queue.qsize())
+            while in_queue.qsize() != 0:
+                _ = in_queue.get(timeout=0.1)
             writerThread.empty_queue()
             writerThread.close_file()
         else:

@@ -2,7 +2,8 @@
 
 import numpy as np
 from numpy.lib.recfunctions import rec_append_fields
-import threading,Queue
+import threading
+from multiprocessing import Process,Queue
 import logging
 import sys
 import socket
@@ -14,6 +15,7 @@ import datetime
 import argparse
 import time
 import cPickle
+import dill
 from subprocess import PIPE, Popen
 from helpers import parse_cfg,control_monitor,create_xml_elem
 from helpers import daemonize,sigHandler,delpid
@@ -154,7 +156,7 @@ def refine_pulsar_db(mode,pulsar_db,**kwargs):
         for pulsar in pulsar_db:
             e_pulsar_dec = ephem.degrees(pulsar['DECJ'])
             dec_dif = np.abs(e_pulsar_dec - e_bs_dec) * 180/np.pi
-            if dec_dif < dec_lim:
+            if dec_dif < dec_lim or pulsar['NAME'] == "J0835-4510":
                 ind_list.append(i)
             i+=1
         return pulsar_db[ind_list]
@@ -199,14 +201,17 @@ def getPotentialPulsars_tracking(utc,boresight_ra,boresight_dec,n_beams,pulsar_d
     return pulsar_list
 
 
-def getPotentialPulsars_stationary(ref_pulsar_db):
+def getPotentialPulsars_stationary(ref_pulsar_db, obsInfo=None):
+    nbeams = int(obsInfo['NBEAM'])
+    beam_spacing = float(obsInfo['BEAM_SPACING'])
     index_to_flag = []
     estimated_fb = []
     i=0
+    time_cover_beam = (nbeams*beam_spacing*((float(nbeams)-1)/nbeams))/15*3600*(365.242190402/366.242190402)
     for pulsar in ref_pulsar_db:
         sec_dif = (molonglo.sidereal_time() - pulsar['PREC_RA'] - pulsar['HA_COR'])*R2S
-        FB = sec_dif / (time_cover_beam/np.cos(pulsar['PREC_DEC'])/351) + 177
-        if FB < 352+3 and FB > -2:
+        FB = sec_dif / (time_cover_beam/np.cos(pulsar['PREC_DEC'])/(nbeams-1)) + nbeams/2 + 2 #Future Wael: the +2 is empirical
+        if FB < nbeams+10 and FB > -10:
             index_to_flag.append(i)
             estimated_fb.append(FB)
         i+=1
@@ -221,9 +226,53 @@ def getPotentialPulsars_stationary(ref_pulsar_db):
     pulsar_list = rec_append_fields(pulsars_to_flag,('FB'),estimated_fb,dtypes='f4')
     return pulsar_list
 
+
+def classifyPulsarsPulses(pulses_queue,bp_addrs_pulsars,beam_config):
+    logging.info("classifyPulsarsPulses => started")
+    while True:
+        pulsar_log_file,pulsar_pulse_candidate,pulsar_name,pulsar_fb = pulses_queue.get()
+        pulsar_log_file = dill.loads(pulsar_log_file)
+        
+        n_bp = len(bp_addrs_pulsars)
+        beam = pulsar_pulse_candidate['beam']
+        for i in range(n_bp):
+            if beam >= beam_config["BEAM_FIRST_RECV_"+str(i)] and\
+                    beam <= beam_config["BEAM_LAST_RECV_"+str(i)]:
+                break
+        host,port = bp_addrs_pulsars["RECV_"+str(i)]
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            logging.debug("classifyPulsarsPulses => Trying to send pulsar pulse candidate. Connecting to (%s, %s), trying to send %s",host,port,pulsar_pulse_candidate)
+            s.connect((host,port))
+            if pulsar_name in ["J0835-4510","J1644-4559","J1243-6423"]:
+                to_save = False
+            else:
+                to_save = True
+            msg = cPickle.dumps((pulsar_pulse_candidate[['SN','sample','H_dm',
+                'H_w','beam']],to_save),protocol=2)
+            s.sendall(msg+"EOF")
+            proba = recvall(s) #probability of pulse
+            s.close()
+            logging.debug("classifyPulsarsPulses => Successfully sent pulsar pulse to (%s, %i)",host,port)
+            pulsar_log_file.write(str(pulsar_name)+" detected at candidate fanbeam: "+\
+                    str(beam)+", pulsar fanbeam: "+str(pulsar_fb)+" with dm: "+str(pulsar_pulse_candidate['H_dm'])+" at time: "+\
+                                str(pulsar_pulse_candidate['time'])+" and sample: "+
+                                str(pulsar_pulse_candidate['sample'])+
+                                " and probability: "+str(proba)+"\n")
+        except socket.error:
+            logging.critical("classifyPulsarsPulses => Connection to: (%s, %i) refused",host,port)
+            pulsar_log_file.write(str(pulsar_name)+" detected at candidate fanbeam: "+\
+                    str(beam)+",pulsar fanbeam: "+str(pulsar_fb)+" with dm: "+\
+                    str(pulsar_pulse_candidate['H_dm'])+" at time: "+\
+                    str(pulsar_pulse_candidate['time'])+" and sample: "+
+                    str(pulsar_pulse_candidate['sample'])+"\n")
+
+
+
     
 
-def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
+def candidateFilter(candidates,PulsarList,pulsar_log_file,pulses_queue,threshold_filter=True):
     """Function that performs stage 1 masking
     
     Returns:
@@ -248,22 +297,28 @@ def candidateFilter(candidates,PulsarList,pulsar_file,threshold_filter=True):
             is_pulsar,hard_filter = candidateIsPulsar(beam,H_dm,Pulsar)
             if is_pulsar:
                 if hard_filter:
-                    pulsar_file.write("*Hard filter* "+Pulsar['NAME']+\
-                            " detected at fanbeam: "+\
-                            str(beam)+" with dm: "+str(H_dm)+" at time: "+\
+                    pulsar_log_file.write("*Hard filter* "+Pulsar['NAME']+\
+                            " detected at candidate fanbeam: "+\
+                            str(beam)+", pulsar fanbeam: "+str(Pulsar['FB'])+" with dm: "+str(H_dm)+" at time: "+\
                             str(candidate['time'])+" and sample: "+
                             str(candidate['sample'])+"\n")
-                    logging.info("%s detected at fanbeam: %i with dm: "+\
-                            "%f at time: %f and sample: %i",Pulsar['NAME'],
-                            beam,H_dm,candidate['time'],candidate['sample'])
+                    logging.info("%s detected at fanbeam: %i (pulsar's %f), with dm: "+\
+                            "%f at time: %f and sample: %i",Pulsar['NAME'],beam,Pulsar['FB'],
+                            H_dm,candidate['time'],candidate['sample'])
                 else:
-                    pulsar_file.write(Pulsar['NAME']+" detected at fanbeam: "+\
-                            str(beam)+" with dm: "+str(H_dm)+" at time: "+\
-                            str(candidate['time'])+" and sample: "+
-                            str(candidate['sample'])+"\n")
-                    logging.info("%s detected at fanbeam: %i with dm: "+\
+                    CLASSIFY_PULSARS = True
+                    if CLASSIFY_PULSARS:
+                        pickled_log_file = dill.dumps(pulsar_log_file) #Use dill to serialize file descriptor
+                        pulses_queue.put([pickled_log_file,candidate.reshape([-1,1]), #Known to have size 0
+                            Pulsar['NAME'],Pulsar['FB']])
+                    else:
+                        pulsar_log_file.write(Pulsar['NAME']+" detected at candidate fanbeam: "+\
+                                str(beam)+", pulsar fanbeam: "+str(Pulsar['FB'])+"with dm: "+str(H_dm)+" at time: "+\
+                                str(candidate['time'])+" and sample: "+
+                                str(candidate['sample'])+"\n")
+                    logging.info("%s detected at fanbeam: %i (pulsar's %f) with dm: "+\
                             "%f at time: %f and sample: %i",Pulsar['NAME'],
-                        beam,H_dm,candidate['time'],candidate['sample'])
+                        beam,Pulsar['FB'],H_dm,candidate['time'],candidate['sample'])
                 mask[i] = False
             else:
                 pass
@@ -282,7 +337,7 @@ def thresholdFilter(candidates):
     logging.info("Received %s candidates",candidates.size)
     a = np.where(candidates['H_w'] < BOXCAR_THRESHOLD)[0]
     b = np.where(candidates['H_dm'] > DM_THRESHOLD)[0]
-    mask = np.where((candidates['H_w'] < BOXCAR_THRESHOLD) & (candidates['H_dm'] > DM_THRESHOLD))[0]
+    mask = np.where((candidates['H_w'] < BOXCAR_THRESHOLD) & (candidates['H_dm'] > DM_THRESHOLD) & (candidates['SN'] > SN_THRESHOLD))[0]
     logging.info("%s events have widths < than %s",len(a),BOXCAR_THRESHOLD)
     logging.info("%s events have dm > %s",len(b),DM_THRESHOLD)
     logging.info("%s events that passed both criteria",len(mask))
@@ -308,6 +363,15 @@ def candidateIsPulsar(beam,H_dm,pulsar):
         if (H_dm<(1+DM_WINDOW/100.)*pulsar['DM'] and\
                 H_dm>(1-DM_WINDOW/100.)*pulsar['DM']):
             return True,True
+    if (beam >= (pulsar['FB']-2) and beam <= (pulsar['FB']+2)) and\
+            pulsar['DM'] < 50:
+#            (pulsar['NAME'] == 'J1751-4657' 
+#                    or pulsar['NAME'] == 'J0151-0635'
+#                    or pulsar['NAME'] == 'J0820-1350'
+#                    or pulsar['NAME'] == 'J0452-1759' 
+#                    or pulsar['NAME'] == 'J0255-5304'
+#                    or pulsar['NAME'] == 'J0034-0721'):
+        return True,False
     if (beam >= (pulsar['FB']-2) and beam <= (pulsar['FB']+2)) and\
             (H_dm<(1+DM_WINDOW/100.)*pulsar['DM'] and\
             H_dm>(1-DM_WINDOW/100.)*pulsar['DM']):
@@ -510,15 +574,28 @@ def test_socket_listen(host):
     return flag,data
 
 
+#def recvall(the_conn):
+#    total_data=[]
+#    while True:
+#        data = the_conn.recv(256)
+#        logging.debug('recieved %s number of bytes:',len(data))
+#        logging.debug('%s',data)
+#        if not data: break
+#        total_data.append(data)
+#    return ''.join(total_data)
+
 def recvall(the_conn):
     total_data=[]
     while True:
-        data = the_conn.recv(256)
-        logging.debug('recieved %s number of bytes:',len(data))
-        logging.debug('%s',data)
+        data = the_conn.recv(16384)
         if not data: break
+        if data[-3:] == "EOF":
+            data = data[:-3]
+            total_data.append(data)
+            break
         total_data.append(data)
     return ''.join(total_data)
+
 
 def socket_listen(host):
     """Function that listens to socket
@@ -613,7 +690,7 @@ def get_xml_tags(flag):
         xml_tags = [["utc_start",str],["source",str],["ra",str],["dec",str],
                 ["md_angle",float],["ns_tilt",float],["pid",str],["mode",str],
                 ["config",str],["observing_type",str],["nchan",int],
-                ["nbit",int],["tsamp",float]]
+                ["nbit",int],["tsamp",float],["beam_spacing",float]]
         return xml_tags
     else:
         raise("Unkown Flag")
@@ -668,7 +745,7 @@ def update_cfg():
         DM_WINDOW = float(updated_cfg['DM_WINDOW'])
         logging.info("Config file updated: DM_WINDOW = %f",
                 DM_WINDOW)
-    
+
     return updated_cfg['PULSAR_MONITOR']
 
 
@@ -718,7 +795,6 @@ molonglo.lat = ephem.degrees(-( 35 + 22/60.0 + 14.5452 / 3600.0) * DD2R)
 molonglo.long = ephem.degrees((149 + 25/60.0 + 28.7682 / 3600.0) * DD2R)
 #molonglo.elev = 400
 
-time_cover_beam = (4*(351./352))/15*3600*(365.242190402/366.242190402)
 
 eta = 2.37558703744e-5
 zeta = -1/289.9
@@ -767,7 +843,7 @@ def main():
     else:
         srv_ctrl_dir = MOPSR_CFG['SERVER_CONTROL_DIR']
         srv_log_dir = MOPSR_CFG['SERVER_LOG_DIR']
-    
+
     pid = os.getpid()
     script_name = os.path.basename(sys.argv[0]).lstrip('server_').\
             rstrip('.py')
@@ -815,6 +891,16 @@ def main():
     for recv,hostname in bp_ips.iteritems():
         node_numb = int(recv[5:]) #eg: recv = RECV_1
         bp_addrs[recv] = (hostname,baseport+100+(node_numb+1))
+
+    # Saving IPs and port number for each BF node (for pulsar pulses)
+    # ---------------------------------------------------------------
+    pulsar_baseport = int(FRB_DETECTOR_CFG['PULSAR_PULSE_CLASS_BASEPORT'])
+    bp_addrs_pulsars = {}
+    for recv,hostname in bp_ips.iteritems():
+        node_numb = int(recv[5:]) #eg: recv = RECV_1
+        bp_addrs_pulsars[recv] = (hostname,pulsar_baseport+1+\
+                (node_numb+1))
+
     # Defining listening address
     # --------------------------
     listening_addrs = (srv_host,baseport)
@@ -834,6 +920,11 @@ def main():
     # ----------------------------------
     proc = Popen(args=[nsmd_script,str(nsmd_port)],shell = False)
     time.sleep(0.05)
+    pulses_queue = Queue()
+    pulsar_pulse_class_process = Process(target = classifyPulsarsPulses,
+            args=(pulses_queue,bp_addrs_pulsars,beam_config))
+    pulsar_pulse_class_process.start()
+    atexit.register(pulsar_pulse_class_process.terminate)
 
     # -----------------------------------------------------------------
     # -----------------------------------------------------------------
@@ -847,8 +938,11 @@ def main():
             logging.critical('Received a non-starting flag: (%s)',flag)
             logging.critical('Trying again')
             continue
+        else: 
+            obsInfo['NBEAM'] = int(beam_config["NBEAM"])
         start_utc = obsInfo['UTC_START']
         logging.info("Received a new start UTC: %s",start_utc)
+        logging.info("obs Info recieved: "+str(obsInfo))
         tmp = update_cfg()
         if tmp == "yes":
             tmp = True
@@ -917,7 +1011,7 @@ def main():
                         pulsar_list = getPotentialPulsars_tracking(utc_now,boresight_ra,
                             boresight_dec,beam_config["NBEAM"],refined_pulsar_db)
                     filtered_candidates = candidateFilter(heimdal_candidates,
-                            pulsar_list,pulsar_file)
+                            pulsar_list,pulsar_file,pulses_queue)
                     if filtered_candidates.size != 0:
                         send_cands_to_bp(bp_addrs,beam_config,filtered_candidates)
                 elif observing_type == "STATIONARY":
@@ -931,13 +1025,13 @@ def main():
                     bulk = [0]
                     logging.debug("number of candidates: %i",n_cands)
                     while ind < n_cands:
-                        if threshold_candidates[ind]['time'] > 1+low_t: #NOTE: '1' is for 1 second of candidates per gulp
+                        if threshold_candidates[ind]['time'] > 0.5+low_t: #NOTE: '0.5' is for 0.5 second of candidates per gulp
                             if pulsar_monitor_on:
                                 molonglo.date = utc_start_datetime +datetime.timedelta(milliseconds = low_t*1000)
-                                pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
+                                pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db,obsInfo)
                             send_cands_to_bp(bp_addrs,beam_config,\
                                 candidateFilter(threshold_candidates[bulk],\
-                                pulsar_list,pulsar_file,False))
+                                pulsar_list,pulsar_file,pulses_queue,False))
                             low_t = threshold_candidates[ind]['time']
                             bulk=[]
                         else:
@@ -947,10 +1041,10 @@ def main():
                     # ------------------
                     logging.debug("Flushing last loop")
                     molonglo.date = utc_start_datetime + datetime.timedelta(milliseconds = low_t*1000)
-                    pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db)
+                    pulsar_list = getPotentialPulsars_stationary(refined_pulsar_db,obsInfo)
                     send_cands_to_bp(bp_addrs,beam_config,\
                             candidateFilter(threshold_candidates[bulk],\
-                            pulsar_list,pulsar_file,False))
+                            pulsar_list,pulsar_file,pulses_queue,False))
                 else:
                     logging.critical("Observing type is neither 'STATIONARY' nor 'TRACKING'")
             elif flag == "STOP":
